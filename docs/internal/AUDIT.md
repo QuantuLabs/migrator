@@ -19,10 +19,11 @@ Current implementation status:
 - `set_pause` implemented
 - `migrate_exact` implemented
 - manual TypeScript SDK implemented
-- operational verification scripts implemented for mint and reserve vault checks
+- operational verification scripts implemented for mint, reserve vault, config, program authority, and reserve-proof checks
 - `Tokenkeg only` policy documented explicitly
 - `cargo test` passes
-- `cargo kani` passes on the migration gate harnesses
+- `cargo clippy --all-targets --all-features -- -D warnings` passes
+- `cargo kani -p migrator-program --features no-entrypoint` passes
 - SDK typecheck passes with `npx tsc --noEmit`
 
 Current verification coverage:
@@ -31,25 +32,40 @@ Current verification coverage:
 - `LiteSVM` boot smoke test
 - `LiteSVM` program-load smoke test
 - `LiteSVM` initialize_config happy path
+- `LiteSVM` initialize_config upgrade-authority mismatch rejection
+- `LiteSVM` initialize_config re-initialization rejection
+- `LiteSVM` initialize_config same-mint rejection
+- `LiteSVM` initialize_config invalid token-program rejection
+- `LiteSVM` initialize_config reserve-vault control rejection
 - `LiteSVM` migrate_exact happy path with real SPL mint/token account layouts
 - `LiteSVM` paused migration rejection
 - `LiteSVM` insufficient reserve rejection
 - `LiteSVM` closed-window rejection
+- `LiteSVM` not-started-window rejection
 - `LiteSVM` wrong old mint rejection
 - `LiteSVM` wrong new mint rejection
 - `LiteSVM` wrong vault rejection
+- `LiteSVM` reserve vault delegate-control rejection
+- `LiteSVM` reserve vault close-authority rejection
 - `LiteSVM` zero-amount rejection
+- `LiteSVM` wrong user destination owner rejection
+- `LiteSVM` uninitialized user destination rejection
+- `LiteSVM` wrong user destination mint rejection
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
+- negative transaction tests assert the exact `TransactionError` / custom error code, not just `.is_err()`
 - `Kani` proof: migration gate matches the control policy for all symbolic timestamps
 - `Kani` proof: migration window boundaries are inclusive
+- `Kani` proofs: config layout stability, strict mint policy, token-account parsing, custody-account control checks
 
 What is still missing before mainnet confidence:
 
 - devnet dry-run with published addresses
 - final Bags mint verification against the `Tokenkeg` checklist
 - final reserve vault verification against the PDA checklist
-- deeper formal coverage of account layout parsing and CPI-adjacent checks
+- recorded reserve-proof artifact with reviewer sign-off
+- explicit upgrade-authority lock/freeze/transfer execution before public launch
+- finalized publication flow using the config/program-authority verification scripts
 
 ## Critical Risks
 
@@ -89,6 +105,7 @@ Mitigation:
 - derive vault authority PDA on-chain every call
 - verify reserve token account owner equals vault PDA
 - verify user destination owner equals signer
+- reject reserve vaults with delegate or close-authority controls
 - never accept unchecked destination authority fields in instruction data
 
 ### C4. Rule mutation after launch
@@ -199,6 +216,7 @@ Mitigation:
 
 - use multisig for upgrade authority before mainnet launch if possible
 - publish upgrade authority policy
+- record the exact authority state and transition signature in the prelaunch runbook
 - keep the instruction surface minimal
 
 ### M3. Log observability
@@ -235,6 +253,10 @@ Current `Kani` scope is intentionally narrow and useful:
 
 - it proves the migration gate returns the expected control outcome for any symbolic `paused/start/end/now` combination where `start <= end`
 - it proves `start_ts` and `end_ts` are inclusive migration boundaries
+- it proves strict mint parsing rejects authority flags
+- it proves token-account parsing rejects wrong owners and uninitialized accounts
+- it proves custody-account parsing rejects delegate and close-authority controls
+- it proves the config layout constants remain stable
 
 Current `Kani` scope does not cover:
 

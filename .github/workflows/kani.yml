@@ -20,5 +20,4 @@ jobs:
           kani-version: 0.67.0
           args: >-
             -p migrator-program
-            --harness migration_gate_matches_control_policy
-            --harness migration_gate_accepts_boundary_timestamps
+            --features no-entrypoint

@@ -62,9 +62,12 @@ Out of scope for V1:
 ## Current Verification
 
 - `cargo test` passes for the workspace
+- `cargo clippy --all-targets --all-features -- -D warnings` passes
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
-- `cargo kani -p migrator-program --harness migration_gate_matches_control_policy --harness migration_gate_accepts_boundary_timestamps` passes
+- `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
+- `LiteSVM` migration-flow suite currently covers `23` end-to-end cases
+- `cargo kani -p migrator-program --features no-entrypoint` passes
 
 ## Mint Policy
 
@@ -75,3 +78,7 @@ V1 only accepts mints owned by:
 For the final `new QX` Bags mint, run the pre-launch checklist in:
 
 - `docs/internal/checklists/TOKENKEG_ONLY_CHECKLIST.md`
+
+For mainnet launch controls, follow:
+
+- `docs/runbooks/MAINNET_PRELAUNCH.md`
