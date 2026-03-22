@@ -33,13 +33,18 @@ Current verification coverage:
 - `LiteSVM` program-load smoke test
 - `LiteSVM` initialize_config happy path
 - `LiteSVM` initialize_config upgrade-authority mismatch rejection
+- `LiteSVM` initialize_config ProgramData wrong-owner rejection
+- `LiteSVM` initialize_config ProgramData wrong-discriminator rejection
 - `LiteSVM` initialize_config re-initialization rejection
 - `LiteSVM` initialize_config same-mint rejection
 - `LiteSVM` initialize_config invalid token-program rejection
 - `LiteSVM` initialize_config reserve-vault control rejection
+- `LiteSVM` initialize_config zero migration-cap rejection
+- `LiteSVM` initialize_config migration-cap-above-reserve rejection
 - `LiteSVM` migrate_exact happy path with real SPL mint/token account layouts
 - `LiteSVM` paused migration rejection
 - `LiteSVM` insufficient reserve rejection
+- `LiteSVM` migration-cap exceeded rejection
 - `LiteSVM` closed-window rejection
 - `LiteSVM` not-started-window rejection
 - `LiteSVM` wrong old mint rejection
@@ -51,6 +56,8 @@ Current verification coverage:
 - `LiteSVM` wrong user destination owner rejection
 - `LiteSVM` uninitialized user destination rejection
 - `LiteSVM` wrong user destination mint rejection
+- `LiteSVM` rollback when burn CPI fails
+- `LiteSVM` rollback when post-burn transfer signing fails
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
 - negative transaction tests assert the exact `TransactionError` / custom error code, not just `.is_err()`
@@ -79,7 +86,9 @@ What is still missing before mainnet confidence:
 
 Risk:
 
-- `1:1` is socially dead if the reserve cannot cover the effective eligible supply.
+- `1:1` is socially dead if the approved eligible supply is wrong or if the reserve cannot cover that approved total.
+- the program now binds an immutable on-chain `migration_cap` and rejects initialization unless the reserve vault already covers it.
+- the remaining trust surface is the off-chain selection of the approved eligible supply, not an unbounded on-chain drain past that cap.
 
 Mitigation:
 
