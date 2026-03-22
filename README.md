@@ -64,6 +64,7 @@ Out of scope for V1:
 - `cargo test` passes for the workspace
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
+- `cargo kani -p migrator-program --harness migration_gate_matches_control_policy --harness migration_gate_accepts_boundary_timestamps` passes
 
 ## Mint Policy
 

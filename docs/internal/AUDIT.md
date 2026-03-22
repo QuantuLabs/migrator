@@ -22,6 +22,7 @@ Current implementation status:
 - operational verification scripts implemented for mint and reserve vault checks
 - `Tokenkeg only` policy documented explicitly
 - `cargo test` passes
+- `cargo kani` passes on the migration gate harnesses
 - SDK typecheck passes with `npx tsc --noEmit`
 
 Current verification coverage:
@@ -37,12 +38,18 @@ Current verification coverage:
 - `LiteSVM` wrong old mint rejection
 - `LiteSVM` wrong new mint rejection
 - `LiteSVM` wrong vault rejection
+- `LiteSVM` zero-amount rejection
+- `LiteSVM` invalid init window rejection
+- `LiteSVM` unauthorized pause rejection
+- `Kani` proof: migration gate matches the control policy for all symbolic timestamps
+- `Kani` proof: migration window boundaries are inclusive
 
 What is still missing before mainnet confidence:
 
 - devnet dry-run with published addresses
 - final Bags mint verification against the `Tokenkeg` checklist
 - final reserve vault verification against the PDA checklist
+- deeper formal coverage of account layout parsing and CPI-adjacent checks
 
 ## Critical Risks
 
@@ -110,6 +117,7 @@ Mitigation:
 - validate owner, mint, token program, and initialization status on every token account
 - copy proven validation patterns from `qx-staking-v1`
 - add negative tests for every invalid account permutation
+- keep formal proofs limited to pure control helpers; use transaction tests for `AccountView`-driven logic
 
 ### H2. Window logic bugs
 
@@ -220,6 +228,29 @@ Mitigation:
 - manual TypeScript SDK
 
 That is a reasonable tradeoff for this migration program, but not for a large evolving product surface.
+
+## Formal Verification Notes
+
+Current `Kani` scope is intentionally narrow and useful:
+
+- it proves the migration gate returns the expected control outcome for any symbolic `paused/start/end/now` combination where `start <= end`
+- it proves `start_ts` and `end_ts` are inclusive migration boundaries
+
+Current `Kani` scope does not cover:
+
+- raw `AccountView` memory parsing
+- PDA account plumbing
+- token CPI behavior
+- runtime Solana account ownership semantics
+
+Why this split is acceptable:
+
+- pure control policy is best handled with proofs
+- Solana account and CPI behavior is better covered here with `LiteSVM` transaction tests
+
+Observed `Kani` caveat:
+
+- current proofs emit unsupported-construct warnings from crate-level Solana/Pinocchio paths, but the verified harnesses stay within the pure control helper and completed successfully
 
 ## Pre-Launch Checklist
 
