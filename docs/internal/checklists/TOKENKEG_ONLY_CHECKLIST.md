@@ -81,7 +81,7 @@ From `sdk/`:
 ```bash
 npm run verify-mint -- <NEW_QX_MINT> <EXPECTED_DECIMALS>
 npm run verify-vault -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>
-npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN>
+npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW>
 npm run verify-program-authority -- <PROGRAM_ID> <EXPECTED_AUTHORITY|none>
 npm run reserve-proof -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]
 ```
@@ -94,6 +94,7 @@ Use these to confirm:
 - the reserve vault owner equals the migrator vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
 - the deployed config account matches the published address set exactly
+- the deployed config `migration_cap` matches the approved eligible raw-unit total exactly
 - the current `ProgramData` authority matches the published upgrade-authority policy
 - the reserve proof artifact is generated from reproducible RPC inputs
 - all scripts exit nonzero on any mismatch
@@ -109,7 +110,7 @@ Before mainnet init, record and publish an internal proof bundle containing:
 - timestamp of the RPC reads
 - slot of the proof reads
 - transaction signature that funded the reserve vault
-- reviewer sign-off that `reserve >= eligible`
+- reviewer sign-off that `reserve >= eligible == migration_cap`
 
 ## Example Bags Token Reference
 

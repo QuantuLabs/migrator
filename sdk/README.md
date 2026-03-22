@@ -46,7 +46,7 @@ Operational verification commands:
 ```bash
 npm run verify-mint -- <NEW_QX_MINT> [EXPECTED_DECIMALS]
 npm run verify-vault -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>
-npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN>
+npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW>
 npm run verify-program-authority -- <PROGRAM_ID> [EXPECTED_AUTHORITY|none]
 npm run reserve-proof -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]
 ```
