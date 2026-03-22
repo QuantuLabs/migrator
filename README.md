@@ -58,6 +58,8 @@ Out of scope for V1:
 - `docs/internal/AUDIT.md` — security and anti-drama audit
 - `docs/internal/checklists/TOKENKEG_ONLY_CHECKLIST.md` — pre-launch verification checklist for the final Bags mint
 - `docs/runbooks/` — ops runbooks for launch and emergency handling
+- `docs/runbooks/KANI_LANE.md` — authoritative per-harness formal-proof lane
+- `docs/runbooks/MOLLUSK_LANE.md` — SVM-native fuzz-fixture lane
 - `sdk/README.md` — expected TypeScript SDK surface
 
 ## Current Verification
@@ -68,7 +70,13 @@ Out of scope for V1:
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
 - `LiteSVM` migration-flow suite currently covers `30` end-to-end cases
-- `cargo kani -p migrator-program --features no-entrypoint` passes
+- `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
+- `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
+
+Current toolchain note:
+
+- `cargo kani -p migrator-program --features no-entrypoint` can hit a late `goto-instrument` failure on this pinned environment even when the individual harnesses all verify successfully
+- use `./scripts/run-kani-lane.sh` as the release gate instead
 
 ## Mint Policy
 

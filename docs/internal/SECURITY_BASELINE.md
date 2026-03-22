@@ -72,12 +72,13 @@ Already aligned:
 - reserve-vault delegate and close-authority rejection
 - formal checks for gate logic, layout stability, overflow behavior, and unaligned roundtrips
 - negative-path transaction tests for wrong mint, wrong vault, bad destination owner, bad reserve controls, and malformed entrypoint data
+- the canonical `Kani` lane is now `./scripts/run-kani-lane.sh` because the batch command is unstable on the pinned toolchain
 
 Still missing or intentionally off-chain:
 
 - reserve sufficiency is now partially bound on-chain through `migration_cap` plus an init-time vault-balance check, but the eligible-supply input still requires operational review
 - verified-build publication is still a prelaunch step, not yet automated in this repo
-- no fuzz harness yet with `Mollusk` or `Trident`
+- `Mollusk` is now the active fuzz-fixture lane for this repo; `Trident` remains optional later if we ever need a heavier stateful fuzzing workflow
 - some LiteSVM tests still skip if the SBF artifact is missing locally
 
 ## Recommendation
@@ -86,6 +87,6 @@ If the goal is "ultra secure" before mainnet:
 
 1. keep the program surface frozen at `initialize_config`, `set_pause`, `migrate_exact`
 2. complete verified-build publication before launch
-3. add one fuzzing lane with `Mollusk` or `Trident`
+3. keep the `Mollusk` lane live and add a broader `Trident` lane only if the program surface grows enough to justify it
 4. keep reserve-proof sign-off as a hard launch gate
 5. move upgrade authority to multisig or an explicit, published lock policy

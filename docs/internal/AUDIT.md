@@ -23,8 +23,9 @@ Current implementation status:
 - `Tokenkeg only` policy documented explicitly
 - `cargo test` passes
 - `cargo clippy --all-targets --all-features -- -D warnings` passes
-- `cargo kani -p migrator-program --features no-entrypoint` passes
+- `./scripts/run-kani-lane.sh` passes for all current `Kani` harnesses
 - SDK typecheck passes with `npx tsc --noEmit`
+- `./scripts/run-mollusk-lane.sh` passes and forces a real SBF-backed `Mollusk` run
 
 Current verification coverage:
 
@@ -60,6 +61,11 @@ Current verification coverage:
 - `LiteSVM` rollback when post-burn transfer signing fails
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
+- `Mollusk` successful `initialize_config` with inner-instruction tracking
+- `Mollusk` rejected `initialize_config` when `migration_cap > reserve`
+- `Mollusk` paused `migrate_exact` rejection before any token CPI
+- `Mollusk` fixture roundtrip replay for successful and failing `initialize_config`
+- `Mollusk` canonical lane requires a built SBF artifact and cannot silently skip in script mode
 - negative transaction tests assert the exact `TransactionError` / custom error code, not just `.is_err()`
 - transaction-level malformed entrypoint payload tests cover empty data, bad discriminator, short migrate payload, short initialize payload, and invalid set-pause payload
 - `Kani` proof: migration gate matches the control policy for all symbolic timestamps
@@ -78,7 +84,8 @@ What is still missing before mainnet confidence:
 - explicit upgrade-authority lock/freeze/transfer execution before public launch
 - finalized publication flow using the config/program-authority verification scripts
 - verified-build publication and public source linkage
-- fuzzing lane with `Mollusk` or `Trident`
+- broader stateful fuzzing beyond the current `Mollusk` lane if the program surface grows
+- upstream `Kani` batch-run stability should be rechecked before restoring the single-command release gate
 
 ## Critical Risks
 

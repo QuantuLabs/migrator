@@ -35,7 +35,8 @@ Verify and publish these exact addresses:
 
 - `cargo test` passes on the pinned repo state
 - `npm run typecheck` passes in `sdk/`
-- `cargo kani -p migrator-program --features no-entrypoint` passes on the pinned repo state
+- `./scripts/run-kani-lane.sh` passes on the pinned repo state
+- `./scripts/run-mollusk-lane.sh` passes on the pinned repo state
 - final mint verification script passes
 - deployed config verification script passes
 - program authority verification script passes

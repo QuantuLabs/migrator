@@ -6,3 +6,5 @@ Current runbooks:
 
 - `MAINNET_PRELAUNCH.md`
 - `EMERGENCY_PAUSE.md`
+- `KANI_LANE.md`
+- `MOLLUSK_LANE.md`

@@ -17,3 +17,5 @@ This repository separates public handoff documents from internal planning and op
 - `internal/checklists/TOKENKEG_ONLY_CHECKLIST.md`
 - `runbooks/MAINNET_PRELAUNCH.md`
 - `runbooks/EMERGENCY_PAUSE.md`
+- `runbooks/KANI_LANE.md`
+- `runbooks/MOLLUSK_LANE.md`
