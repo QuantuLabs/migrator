@@ -9,7 +9,8 @@ export const MIGRATION_CONFIG_SEED = Buffer.from("migration-config");
 export const VAULT_AUTHORITY_SEED = Buffer.from("vault-authority");
 
 export const MIGRATION_CONFIG_DISCRIMINATOR = Buffer.from("qxmigr01", "ascii");
-export const MIGRATION_CONFIG_SIZE = 292;
+export const MIGRATION_CONFIG_SIZE = 296;
+export const MIGRATION_CONFIG_VERSION = 1;
 
 export type MigrationConfig = {
   version: number;
@@ -141,6 +142,9 @@ export function decodeMigrationConfig(data: Buffer): MigrationConfig {
   if (!data.subarray(0, 8).equals(MIGRATION_CONFIG_DISCRIMINATOR)) {
     throw new Error("Invalid MigrationConfig discriminator");
   }
+  if (data[8] !== MIGRATION_CONFIG_VERSION) {
+    throw new Error(`Unsupported MigrationConfig version: expected ${MIGRATION_CONFIG_VERSION}, got ${data[8]}`);
+  }
 
   return {
     version: data[8],
@@ -153,8 +157,8 @@ export function decodeMigrationConfig(data: Buffer): MigrationConfig {
     tokenProgramId: new PublicKey(data.subarray(108, 140)),
     vaultAuthority: new PublicKey(data.subarray(140, 172)),
     vaultNewQx: new PublicKey(data.subarray(172, 204)),
-    totalMigrated: data.readBigUInt64LE(204),
-    startTs: data.readBigInt64LE(212),
-    endTs: data.readBigInt64LE(220),
+    totalMigrated: data.readBigUInt64LE(208),
+    startTs: data.readBigInt64LE(216),
+    endTs: data.readBigInt64LE(224),
   };
 }

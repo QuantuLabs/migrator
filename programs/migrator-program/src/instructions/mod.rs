@@ -277,7 +277,13 @@ mod verification {
         let end_ts: i64 = kani::any();
         kani::assume(start_ts <= end_ts);
 
-        assert_eq!(evaluate_migration_gate(false, start_ts, end_ts, start_ts), Ok(()));
-        assert_eq!(evaluate_migration_gate(false, start_ts, end_ts, end_ts), Ok(()));
+        assert_eq!(
+            evaluate_migration_gate(false, start_ts, end_ts, start_ts),
+            Ok(())
+        );
+        assert_eq!(
+            evaluate_migration_gate(false, start_ts, end_ts, end_ts),
+            Ok(())
+        );
     }
 }

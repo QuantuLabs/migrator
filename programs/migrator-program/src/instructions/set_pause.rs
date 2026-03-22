@@ -20,11 +20,12 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
 
     assert_config_pda(config_account, program_id)?;
 
-    let config = unsafe { MigrationConfig::from_account_info_mut(config_account, program_id)? };
+    let mut config = unsafe { MigrationConfig::from_account_info(config_account, program_id)? };
     if config.admin != *admin.address().as_array() {
         return Err(MigrationError::Unauthorized.into());
     }
     config.paused = if paused { 1 } else { 0 };
+    unsafe { config.store(config_account, program_id)? };
 
     pinocchio_log::log!("PauseUpdated");
 

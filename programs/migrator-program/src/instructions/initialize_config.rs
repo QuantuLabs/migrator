@@ -58,8 +58,11 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         return Err(MigrationError::InvalidConfig.into());
     }
 
-    validate_old_mint_account(old_qx_mint, &old_mint_key)?;
-    validate_new_mint_account(new_qx_mint, &new_mint_key)?;
+    let old_decimals = validate_old_mint_account(old_qx_mint, &old_mint_key)?;
+    let new_decimals = validate_new_mint_account(new_qx_mint, &new_mint_key)?;
+    if old_decimals != new_decimals {
+        return Err(MigrationError::InvalidConfig.into());
+    }
 
     unsafe {
         validate_custody_token_account(
@@ -84,8 +87,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         cfg_signer,
     )?;
 
-    let config = unsafe { MigrationConfig::init(config_account)? };
-    config.version = 1;
+    let mut config = unsafe { MigrationConfig::init(config_account)? };
     config.bump = config_bump;
     config.vault_authority_bump = vault_authority_bump;
     config.paused = 0;
@@ -105,6 +107,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     config.start_ts = start_ts;
     config.end_ts = end_ts;
     config.reserved = [0u8; 64];
+    unsafe { config.store(config_account, program_id)? };
 
     pinocchio_log::log!("MigrationConfigInitialized");
 

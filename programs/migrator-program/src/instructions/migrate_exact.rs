@@ -70,8 +70,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
             return Err(MigrationError::InvalidNewMint.into());
         }
 
-        validate_old_mint_account(old_qx_mint, &config.old_qx_mint)?;
-        validate_new_mint_account(new_qx_mint, &config.new_qx_mint)?;
+        let _ = validate_old_mint_account(old_qx_mint, &config.old_qx_mint)?;
+        let _ = validate_new_mint_account(new_qx_mint, &config.new_qx_mint)?;
 
         unsafe {
             validate_custody_token_account(
@@ -112,11 +112,12 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     }
     .invoke_signed(core::slice::from_ref(&vault_signer))?;
 
-    let config = unsafe { MigrationConfig::from_account_info_mut(config_account, program_id)? };
+    let mut config = unsafe { MigrationConfig::from_account_info(config_account, program_id)? };
     config.total_migrated = config
         .total_migrated
         .checked_add(amount_in)
         .ok_or(MigrationError::MathOverflow)?;
+    unsafe { config.store(config_account, program_id)? };
 
     pinocchio_log::log!("Migrated");
 

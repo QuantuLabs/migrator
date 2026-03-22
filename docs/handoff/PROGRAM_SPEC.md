@@ -59,8 +59,13 @@ Required checks:
 - vault authority PDA matches seeds
 - `old QX` mint and `new QX` mint are different
 - both mints belong to the same supported token program
+- both mints are initialized
+- both mints have `mintAuthority == None`
+- both mints have `freezeAuthority == None`
+- both mints have matching decimals
 - reserve vault mint equals `new QX`
 - reserve vault owner equals vault authority PDA
+- reserve vault delegate and close-authority controls are cleared
 - `start_ts <= end_ts`
 
 ### 1. `set_pause(paused: bool)`
@@ -102,8 +107,10 @@ Required checks:
 - user old token account mint is `old QX`
 - user new token account owner is `user`
 - user new token account mint is `new QX`
+- both user token accounts are initialized
 - reserve vault mint is `new QX`
 - reserve vault owner is vault authority PDA
+- reserve vault delegate and close-authority controls are cleared
 - reserve vault balance is at least `amount_in`
 
 Effects:
@@ -126,7 +133,11 @@ Important runtime note:
 
 Suggested `#[repr(C)]` layout:
 
-Total size: `292 bytes`
+Total size: `296 bytes`
+
+Padding note:
+
+- `repr(C)` inserts padding before `total_migrated`, so the final scalar offsets are `208 / 216 / 224 / 232`, not a packed continuation after byte `204`
 
 | Field | Type |
 |---|---|
