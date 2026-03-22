@@ -277,7 +277,7 @@ impl MigrationFlowFixture {
                 AccountMeta::new_readonly(self.ops_admin.pubkey(), true),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(self.vault_authority_pda, false),
-                AccountMeta::new_readonly(self.vault_new_qx, false),
+                AccountMeta::new(self.vault_new_qx, false),
                 AccountMeta::new_readonly(self.old_qx_mint, false),
                 AccountMeta::new_readonly(self.new_qx_mint, false),
                 AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
@@ -299,6 +299,43 @@ impl MigrationFlowFixture {
         self.svm
             .send_transaction(tx)
             .expect("initialize_config should succeed");
+    }
+
+    fn send_initialize_config_expect_err(&mut self, start_ts: i64, end_ts: i64) {
+        let mut data = vec![0u8];
+        data.extend_from_slice(&start_ts.to_le_bytes());
+        data.extend_from_slice(&end_ts.to_le_bytes());
+
+        let ix = Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(self.initializer.pubkey(), true),
+                AccountMeta::new_readonly(self.ops_admin.pubkey(), true),
+                AccountMeta::new(self.config_pda, false),
+                AccountMeta::new_readonly(self.vault_authority_pda, false),
+                AccountMeta::new(self.vault_new_qx, false),
+                AccountMeta::new_readonly(self.old_qx_mint, false),
+                AccountMeta::new_readonly(self.new_qx_mint, false),
+                AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
+                AccountMeta::new_readonly(Address::default(), false),
+                AccountMeta::new_readonly(self.program_data, false),
+            ],
+            data,
+        };
+
+        let blockhash = self.svm.latest_blockhash();
+        let msg =
+            Message::new_with_blockhash(&[ix], Some(&self.initializer.pubkey()), &blockhash);
+        let tx = VersionedTransaction::try_new(
+            VersionedMessage::Legacy(msg),
+            &[&self.initializer, &self.ops_admin],
+        )
+        .expect("signed tx should be created");
+
+        assert!(
+            self.svm.send_transaction(tx).is_err(),
+            "initialize_config should fail"
+        );
     }
 
     fn send_migrate_exact(&mut self, amount: u64) {
@@ -349,6 +386,24 @@ impl MigrationFlowFixture {
         self.svm
             .send_transaction(tx)
             .expect("set_pause should succeed");
+    }
+
+    fn send_set_pause_expect_err(&mut self, admin: &Keypair, paused: bool) {
+        let ix = Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(admin.pubkey(), true),
+                AccountMeta::new(self.config_pda, false),
+            ],
+            data: vec![1u8, if paused { 1 } else { 0 }],
+        };
+
+        let blockhash = self.svm.latest_blockhash();
+        let msg = Message::new_with_blockhash(&[ix], Some(&admin.pubkey()), &blockhash);
+        let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[admin])
+            .expect("signed tx should be created");
+
+        assert!(self.svm.send_transaction(tx).is_err(), "set_pause should fail");
     }
 
     fn send_migrate_exact_expect_err(&mut self, amount: u64) {
@@ -496,6 +551,21 @@ fn initialize_config_persists_expected_state() {
 }
 
 #[test]
+fn initialize_config_rejects_invalid_timestamp_window() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config_expect_err(10, 9);
+
+    let account = fixture
+        .svm
+        .get_account(&fixture.config_pda)
+        .expect("config placeholder account should exist");
+    assert!(account.data.is_empty(), "config should remain uninitialized");
+}
+
+#[test]
 fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -558,6 +628,28 @@ fn migrate_exact_rejects_when_paused_without_mutating_balances() {
 }
 
 #[test]
+fn set_pause_rejects_unauthorized_admin_without_mutating_config() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+    let outsider = Keypair::new();
+    fixture
+        .svm
+        .airdrop(&outsider.pubkey(), 1_000_000_000)
+        .expect("airdrop for outsider should succeed");
+
+    let paused_before = fixture.config().paused;
+    let total_before = fixture.config().total_migrated;
+
+    fixture.send_set_pause_expect_err(&outsider, true);
+
+    assert_eq!(fixture.config().paused, paused_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
 fn migrate_exact_rejects_when_reserve_is_insufficient() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -595,6 +687,27 @@ fn migrate_exact_rejects_when_window_is_closed() {
     assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
     assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
     assert_eq!(fixture.config().total_migrated, 0);
+}
+
+#[test]
+fn migrate_exact_rejects_zero_amount_without_mutating_state() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    fixture.send_migrate_exact_expect_err(0);
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
 }
 
 #[test]

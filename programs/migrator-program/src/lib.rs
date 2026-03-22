@@ -1,5 +1,4 @@
 #![cfg_attr(not(test), no_std)]
-#![allow(unexpected_cfgs)]
 
 pub mod errors;
 pub mod instructions;

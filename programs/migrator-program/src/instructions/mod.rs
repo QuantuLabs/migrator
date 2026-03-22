@@ -76,6 +76,25 @@ pub fn parse_window_exact(data: &[u8]) -> Result<(i64, i64), ProgramError> {
 }
 
 #[inline(always)]
+pub fn evaluate_migration_gate(
+    paused: bool,
+    start_ts: i64,
+    end_ts: i64,
+    now: i64,
+) -> Result<(), MigrationError> {
+    if paused {
+        return Err(MigrationError::ProtocolPaused);
+    }
+    if now < start_ts {
+        return Err(MigrationError::MigrationNotStarted);
+    }
+    if now > end_ts {
+        return Err(MigrationError::MigrationClosed);
+    }
+    Ok(())
+}
+
+#[inline(always)]
 pub fn assert_program_upgrade_authority(
     authority_signer: &AccountView,
     program_data: &AccountView,
@@ -156,7 +175,8 @@ pub fn create_pda_account_idempotent(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_bool_exact, parse_u64_exact, parse_window_exact};
+    use super::{evaluate_migration_gate, parse_bool_exact, parse_u64_exact, parse_window_exact};
+    use crate::errors::MigrationError;
     use pinocchio::error::ProgramError;
 
     #[test]
@@ -196,5 +216,68 @@ mod tests {
             parse_window_exact(&bytes[..15]).unwrap_err(),
             ProgramError::InvalidInstructionData
         );
+    }
+
+    #[test]
+    fn evaluate_migration_gate_uses_inclusive_window_bounds() {
+        assert_eq!(evaluate_migration_gate(false, 10, 20, 10), Ok(()));
+        assert_eq!(evaluate_migration_gate(false, 10, 20, 20), Ok(()));
+        assert_eq!(
+            evaluate_migration_gate(false, 10, 20, 9),
+            Err(MigrationError::MigrationNotStarted)
+        );
+        assert_eq!(
+            evaluate_migration_gate(false, 10, 20, 21),
+            Err(MigrationError::MigrationClosed)
+        );
+    }
+
+    #[test]
+    fn evaluate_migration_gate_prioritizes_pause() {
+        assert_eq!(
+            evaluate_migration_gate(true, 10, 20, 0),
+            Err(MigrationError::ProtocolPaused)
+        );
+        assert_eq!(
+            evaluate_migration_gate(true, 10, 20, 99),
+            Err(MigrationError::ProtocolPaused)
+        );
+    }
+}
+
+#[cfg(kani)]
+mod verification {
+    use super::evaluate_migration_gate;
+    use crate::errors::MigrationError;
+
+    #[kani::proof]
+    fn migration_gate_matches_control_policy() {
+        let paused: bool = kani::any();
+        let start_ts: i64 = kani::any();
+        let end_ts: i64 = kani::any();
+        kani::assume(start_ts <= end_ts);
+        let now: i64 = kani::any();
+
+        let result = evaluate_migration_gate(paused, start_ts, end_ts, now);
+
+        if paused {
+            assert_eq!(result, Err(MigrationError::ProtocolPaused));
+        } else if now < start_ts {
+            assert_eq!(result, Err(MigrationError::MigrationNotStarted));
+        } else if now > end_ts {
+            assert_eq!(result, Err(MigrationError::MigrationClosed));
+        } else {
+            assert_eq!(result, Ok(()));
+        }
+    }
+
+    #[kani::proof]
+    fn migration_gate_accepts_boundary_timestamps() {
+        let start_ts: i64 = kani::any();
+        let end_ts: i64 = kani::any();
+        kani::assume(start_ts <= end_ts);
+
+        assert_eq!(evaluate_migration_gate(false, start_ts, end_ts, start_ts), Ok(()));
+        assert_eq!(evaluate_migration_gate(false, start_ts, end_ts, end_ts), Ok(()));
     }
 }

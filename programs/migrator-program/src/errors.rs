@@ -1,5 +1,6 @@
 use pinocchio::error::ProgramError;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum MigrationError {
     Unauthorized = 0,

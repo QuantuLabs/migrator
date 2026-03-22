@@ -50,15 +50,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     let vault_authority_bump;
     {
         let config = unsafe { MigrationConfig::from_account_info(config_account, program_id)? };
-        if config.paused != 0 {
-            return Err(MigrationError::ProtocolPaused.into());
-        }
-        if now < config.start_ts {
-            return Err(MigrationError::MigrationNotStarted.into());
-        }
-        if now > config.end_ts {
-            return Err(MigrationError::MigrationClosed.into());
-        }
+        super::evaluate_migration_gate(config.paused != 0, config.start_ts, config.end_ts, now)
+            .map_err(ProgramError::from)?;
         if config.token_program_id != *token_program.address().as_array() {
             return Err(MigrationError::InvalidTokenProgram.into());
         }
