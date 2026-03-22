@@ -76,6 +76,18 @@ pub fn parse_window_exact(data: &[u8]) -> Result<(i64, i64), ProgramError> {
 }
 
 #[inline(always)]
+pub fn parse_initialize_config_data_exact(data: &[u8]) -> Result<(i64, i64, u64), ProgramError> {
+    if data.len() != 24 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let start_ts = i64::from_le_bytes(data[0..8].try_into().unwrap());
+    let end_ts = i64::from_le_bytes(data[8..16].try_into().unwrap());
+    let migration_cap = u64::from_le_bytes(data[16..24].try_into().unwrap());
+    Ok((start_ts, end_ts, migration_cap))
+}
+
+#[inline(always)]
 pub fn evaluate_migration_gate(
     paused: bool,
     start_ts: i64,
@@ -175,7 +187,10 @@ pub fn create_pda_account_idempotent(
 
 #[cfg(test)]
 mod tests {
-    use super::{evaluate_migration_gate, parse_bool_exact, parse_u64_exact, parse_window_exact};
+    use super::{
+        evaluate_migration_gate, parse_bool_exact, parse_initialize_config_data_exact,
+        parse_u64_exact, parse_window_exact,
+    };
     use crate::errors::MigrationError;
     use pinocchio::error::ProgramError;
 
@@ -214,6 +229,22 @@ mod tests {
         assert_eq!(parse_window_exact(&bytes).unwrap(), (10, 20));
         assert_eq!(
             parse_window_exact(&bytes[..15]).unwrap_err(),
+            ProgramError::InvalidInstructionData
+        );
+    }
+
+    #[test]
+    fn parse_initialize_config_data_exact_accepts_only_24_bytes() {
+        let mut bytes = [0u8; 24];
+        bytes[0..8].copy_from_slice(&10i64.to_le_bytes());
+        bytes[8..16].copy_from_slice(&20i64.to_le_bytes());
+        bytes[16..24].copy_from_slice(&30u64.to_le_bytes());
+        assert_eq!(
+            parse_initialize_config_data_exact(&bytes).unwrap(),
+            (10, 20, 30)
+        );
+        assert_eq!(
+            parse_initialize_config_data_exact(&bytes[..23]).unwrap_err(),
             ProgramError::InvalidInstructionData
         );
     }

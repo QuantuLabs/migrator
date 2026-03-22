@@ -24,6 +24,7 @@ export type MigrationConfig = {
   vaultAuthority: PublicKey;
   vaultNewQx: PublicKey;
   totalMigrated: bigint;
+  migrationCap: bigint;
   startTs: bigint;
   endTs: bigint;
 };
@@ -40,11 +41,16 @@ export function findProgramDataPda(programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([programId.toBuffer()], BPF_LOADER_UPGRADEABLE_PROGRAM_ID);
 }
 
-export function encodeInitializeConfigData(startTs: bigint, endTs: bigint): Buffer {
-  const data = Buffer.alloc(1 + 8 + 8);
+export function encodeInitializeConfigData(
+  startTs: bigint,
+  endTs: bigint,
+  migrationCap: bigint,
+): Buffer {
+  const data = Buffer.alloc(1 + 8 + 8 + 8);
   data[0] = 0;
   data.writeBigInt64LE(startTs, 1);
   data.writeBigInt64LE(endTs, 9);
+  data.writeBigUInt64LE(migrationCap, 17);
   return data;
 }
 
@@ -71,6 +77,7 @@ export function buildInitializeConfigIx(params: {
   programData: PublicKey;
   startTs: bigint;
   endTs: bigint;
+  migrationCap: bigint;
 }): TransactionInstruction {
   return new TransactionInstruction({
     programId: params.programId,
@@ -86,7 +93,7 @@ export function buildInitializeConfigIx(params: {
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: params.programData, isSigner: false, isWritable: false },
     ],
-    data: encodeInitializeConfigData(params.startTs, params.endTs),
+    data: encodeInitializeConfigData(params.startTs, params.endTs, params.migrationCap),
   });
 }
 
@@ -158,6 +165,7 @@ export function decodeMigrationConfig(data: Buffer): MigrationConfig {
     vaultAuthority: new PublicKey(data.subarray(140, 172)),
     vaultNewQx: new PublicKey(data.subarray(172, 204)),
     totalMigrated: data.readBigUInt64LE(208),
+    migrationCap: data.readBigUInt64LE(232),
     startTs: data.readBigInt64LE(216),
     endTs: data.readBigInt64LE(224),
   };

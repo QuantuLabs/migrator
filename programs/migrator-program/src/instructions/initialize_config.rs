@@ -7,15 +7,16 @@ use pinocchio::{
 use crate::{
     errors::MigrationError,
     state::{
-        validate_custody_token_account, validate_new_mint_account, validate_old_mint_account,
-        validate_token_program, MigrationConfig,
+        token_amount, validate_custody_token_account, validate_migration_window,
+        validate_new_mint_account, validate_old_mint_account, validate_token_program,
+        MigrationConfig,
     },
     MIGRATION_CONFIG_SEED,
 };
 
 use super::{
     assert_config_pda, assert_program_upgrade_authority, assert_vault_authority_pda,
-    create_pda_account_idempotent, parse_window_exact,
+    create_pda_account_idempotent, parse_initialize_config_data_exact,
 };
 
 // Accounts:
@@ -29,7 +30,7 @@ use super::{
 // 7. [] token program
 // 8. [] system program (unused, kept for explicit client contract)
 // 9. [] program_data (Upgradeable Loader ProgramData PDA)
-// Data: start_ts(i64), end_ts(i64)
+// Data: start_ts(i64), end_ts(i64), migration_cap(u64)
 pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> ProgramResult {
     let [initializer_authority, ops_admin, config_account, vault_authority, vault_new_qx, old_qx_mint, new_qx_mint, token_program, _system_program, program_data, ..] =
         accounts
@@ -41,9 +42,10 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let (start_ts, end_ts) = parse_window_exact(data)?;
-    if start_ts > end_ts {
-        return Err(MigrationError::InvalidTimestamp.into());
+    let (start_ts, end_ts, migration_cap) = parse_initialize_config_data_exact(data)?;
+    validate_migration_window(start_ts, end_ts)?;
+    if migration_cap == 0 {
+        return Err(MigrationError::InvalidConfig.into());
     }
 
     assert_program_upgrade_authority(initializer_authority, program_data, program_id)?;
@@ -70,6 +72,9 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
             &new_mint_key,
             vault_authority.address().as_array(),
         )?;
+        if token_amount(vault_new_qx)? < migration_cap {
+            return Err(MigrationError::InsufficientVaultLiquidity.into());
+        }
     }
 
     let bump_seed = [config_bump];
@@ -107,6 +112,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     config.start_ts = start_ts;
     config.end_ts = end_ts;
     config.reserved = [0u8; 64];
+    config.set_migration_cap(migration_cap);
     unsafe { config.store(config_account, program_id)? };
 
     pinocchio_log::log!("MigrationConfigInitialized");

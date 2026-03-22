@@ -38,6 +38,7 @@ impl MigrationConfig {
     pub const DISCRIMINATOR: [u8; 8] = *b"qxmigr01";
     pub const VERSION: u8 = 1;
     pub const SIZE: usize = size_of::<Self>();
+    const MIGRATION_CAP_OFFSET: usize = 0;
 
     #[inline(always)]
     fn assert_storage_account(
@@ -100,6 +101,21 @@ impl MigrationConfig {
         config.discriminator = Self::DISCRIMINATOR;
         config.version = Self::VERSION;
         Ok(config)
+    }
+
+    #[inline(always)]
+    pub fn migration_cap(&self) -> u64 {
+        u64::from_le_bytes(
+            self.reserved[Self::MIGRATION_CAP_OFFSET..Self::MIGRATION_CAP_OFFSET + 8]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    #[inline(always)]
+    pub fn set_migration_cap(&mut self, migration_cap: u64) {
+        self.reserved[Self::MIGRATION_CAP_OFFSET..Self::MIGRATION_CAP_OFFSET + 8]
+            .copy_from_slice(&migration_cap.to_le_bytes());
     }
 }
 
@@ -263,14 +279,81 @@ pub fn token_amount_bytes(data: &[u8]) -> Result<u64, ProgramError> {
     Ok(u64::from_le_bytes(data[64..72].try_into().unwrap()))
 }
 
+#[inline(always)]
+pub fn validate_migration_window(start_ts: i64, end_ts: i64) -> Result<(), ProgramError> {
+    if start_ts > end_ts {
+        return Err(MigrationError::InvalidTimestamp.into());
+    }
+    Ok(())
+}
+
+#[inline(always)]
+pub fn checked_total_migrated_after(current: u64, amount: u64) -> Result<u64, ProgramError> {
+    current
+        .checked_add(amount)
+        .ok_or(MigrationError::MathOverflow.into())
+}
+
+#[inline(always)]
+pub fn encode_migration_config_bytes(config: &MigrationConfig) -> [u8; MigrationConfig::SIZE] {
+    let mut bytes = [0u8; MigrationConfig::SIZE];
+    unsafe {
+        write_unaligned(bytes.as_mut_ptr() as *mut MigrationConfig, *config);
+    }
+    bytes
+}
+
+#[inline(always)]
+pub fn validate_migration_cap(
+    current: u64,
+    amount: u64,
+    migration_cap: u64,
+) -> Result<(), ProgramError> {
+    if current > migration_cap {
+        return Err(MigrationError::MigrationCapExceeded.into());
+    }
+
+    let remaining = migration_cap
+        .checked_sub(current)
+        .ok_or(MigrationError::MigrationCapExceeded)?;
+    if amount > remaining {
+        return Err(MigrationError::MigrationCapExceeded.into());
+    }
+
+    Ok(())
+}
+
 #[cfg(kani)]
 mod verification {
+    use core::ptr::read_unaligned;
+
     use super::{
-        validate_custody_token_account_bytes, validate_strict_mint_bytes,
-        validate_token_account_bytes, MigrationConfig,
+        checked_total_migrated_after, encode_migration_config_bytes,
+        validate_custody_token_account_bytes, validate_migration_cap, validate_migration_window,
+        validate_strict_mint_bytes, validate_token_account_bytes, MigrationConfig,
     };
     use crate::errors::MigrationError;
     use pinocchio::error::ProgramError;
+
+    fn any_migration_config() -> MigrationConfig {
+        MigrationConfig {
+            discriminator: kani::any(),
+            version: kani::any(),
+            bump: kani::any(),
+            vault_authority_bump: kani::any(),
+            paused: kani::any(),
+            admin: kani::any(),
+            old_qx_mint: kani::any(),
+            new_qx_mint: kani::any(),
+            token_program_id: kani::any(),
+            vault_authority: kani::any(),
+            vault_new_qx: kani::any(),
+            total_migrated: kani::any(),
+            start_ts: kani::any(),
+            end_ts: kani::any(),
+            reserved: kani::any(),
+        }
+    }
 
     #[kani::proof]
     fn migration_config_layout_is_stable() {
@@ -388,5 +471,61 @@ mod verification {
             validate_strict_mint_bytes(&data),
             Err(ProgramError::InvalidAccountData)
         );
+    }
+
+    #[kani::proof]
+    fn checked_total_migrated_after_matches_checked_add() {
+        let current: u64 = kani::any();
+        let amount: u64 = kani::any();
+        let expected = current.checked_add(amount);
+
+        match expected {
+            Some(sum) => assert_eq!(checked_total_migrated_after(current, amount), Ok(sum)),
+            None => assert_eq!(
+                checked_total_migrated_after(current, amount),
+                Err(MigrationError::MathOverflow.into())
+            ),
+        }
+    }
+
+    #[kani::proof]
+    fn validate_migration_window_rejects_only_inverted_bounds() {
+        let start_ts: i64 = kani::any();
+        let end_ts: i64 = kani::any();
+        let result = validate_migration_window(start_ts, end_ts);
+
+        if start_ts > end_ts {
+            assert_eq!(result, Err(MigrationError::InvalidTimestamp.into()));
+        } else {
+            assert_eq!(result, Ok(()));
+        }
+    }
+
+    #[kani::proof]
+    fn migration_config_roundtrip_via_unaligned_io_preserves_value() {
+        let config = any_migration_config();
+        let bytes = encode_migration_config_bytes(&config);
+        let decoded = unsafe { read_unaligned(bytes.as_ptr() as *const MigrationConfig) };
+        assert_eq!(decoded, config);
+    }
+
+    #[kani::proof]
+    fn migration_cap_helpers_roundtrip_and_reject_over_cap() {
+        let migration_cap: u64 = kani::any();
+        let current: u64 = kani::any();
+        let amount: u64 = kani::any();
+
+        let mut config = any_migration_config();
+        config.set_migration_cap(migration_cap);
+        assert_eq!(config.migration_cap(), migration_cap);
+
+        let result = validate_migration_cap(current, amount, migration_cap);
+        if current > migration_cap {
+            assert_eq!(result, Err(MigrationError::MigrationCapExceeded.into()));
+        } else if amount > migration_cap - current {
+            assert_eq!(result, Err(MigrationError::MigrationCapExceeded.into()));
+        } else {
+            assert_eq!(result, Ok(()));
+        }
     }
 }

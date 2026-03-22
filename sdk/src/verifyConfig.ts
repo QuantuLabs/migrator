@@ -22,12 +22,13 @@ async function main() {
   const newMintArg = process.argv[4];
   const reserveVaultArg = process.argv[5];
   const opsAdminArg = process.argv[6];
+  const migrationCapArg = process.argv[7];
   const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
   const commitment = resolveCommitment();
 
-  if (!programIdArg || !oldMintArg || !newMintArg || !reserveVaultArg || !opsAdminArg) {
+  if (!programIdArg || !oldMintArg || !newMintArg || !reserveVaultArg || !opsAdminArg || !migrationCapArg) {
     throw new Error(
-      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN>",
+      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW>",
     );
   }
 
@@ -37,6 +38,7 @@ async function main() {
   const newMint = new PublicKey(newMintArg);
   const reserveVault = new PublicKey(reserveVaultArg);
   const opsAdmin = new PublicKey(opsAdminArg);
+  const migrationCap = BigInt(migrationCapArg);
   const [configPda, configBump] = findMigrationConfigPda(programId);
   const [vaultAuthority, vaultAuthorityBump] = findVaultAuthorityPda(programId);
 
@@ -63,6 +65,7 @@ async function main() {
     reserveVaultMatches: config.vaultNewQx.equals(reserveVault),
     configBumpMatches: config.bump === configBump,
     vaultAuthorityBumpMatches: config.vaultAuthorityBump === vaultAuthorityBump,
+    migrationCapMatches: config.migrationCap === migrationCap,
   };
   const ok = Object.values(checks).every(Boolean);
 
@@ -79,6 +82,7 @@ async function main() {
         expectedNewMint: newMint.toBase58(),
         expectedReserveVault: reserveVault.toBase58(),
         expectedOpsAdmin: opsAdmin.toBase58(),
+        expectedMigrationCap: migrationCap.toString(),
         config: {
           version: config.version,
           bump: config.bump,
@@ -91,6 +95,7 @@ async function main() {
           vaultAuthority: config.vaultAuthority.toBase58(),
           vaultNewQx: config.vaultNewQx.toBase58(),
           totalMigrated: config.totalMigrated.toString(),
+          migrationCap: config.migrationCap.toString(),
           startTs: config.startTs.toString(),
           endTs: config.endTs.toString(),
         },

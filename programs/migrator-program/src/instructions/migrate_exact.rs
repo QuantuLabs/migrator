@@ -8,8 +8,9 @@ use pinocchio_token::instructions::{Burn, Transfer};
 use crate::{
     errors::MigrationError,
     state::{
-        token_amount, validate_custody_token_account, validate_new_mint_account,
-        validate_old_mint_account, validate_token_account, validate_token_program, MigrationConfig,
+        checked_total_migrated_after, token_amount, validate_custody_token_account,
+        validate_migration_cap, validate_new_mint_account, validate_old_mint_account,
+        validate_token_account, validate_token_program, MigrationConfig,
     },
     VAULT_AUTHORITY_SEED,
 };
@@ -48,6 +49,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
 
     let now = now_ts()?;
     let vault_authority_bump;
+    let total_migrated_after;
     {
         let config = unsafe { MigrationConfig::from_account_info(config_account, program_id)? };
         super::evaluate_migration_gate(config.paused != 0, config.start_ts, config.end_ts, now)
@@ -72,6 +74,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
 
         let _ = validate_old_mint_account(old_qx_mint, &config.old_qx_mint)?;
         let _ = validate_new_mint_account(new_qx_mint, &config.new_qx_mint)?;
+        validate_migration_cap(config.total_migrated, amount_in, config.migration_cap())?;
+        total_migrated_after = checked_total_migrated_after(config.total_migrated, amount_in)?;
 
         unsafe {
             validate_custody_token_account(
@@ -113,10 +117,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     .invoke_signed(core::slice::from_ref(&vault_signer))?;
 
     let mut config = unsafe { MigrationConfig::from_account_info(config_account, program_id)? };
-    config.total_migrated = config
-        .total_migrated
-        .checked_add(amount_in)
-        .ok_or(MigrationError::MathOverflow)?;
+    config.total_migrated = total_migrated_after;
     unsafe { config.store(config_account, program_id)? };
 
     pinocchio_log::log!("Migrated");
