@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "verify-mint": "node --experimental-strip-types src/verifyMint.ts"
+    "verify-mint": "node --experimental-strip-types src/verifyMint.ts",
+    "verify-vault": "node --experimental-strip-types src/verifyReserveVault.ts"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.2"

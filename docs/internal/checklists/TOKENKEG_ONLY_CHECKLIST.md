@@ -76,6 +76,21 @@ Use this to confirm:
 - displayed supply
 - reserve math assumptions
 
+## SDK Checks
+
+From `sdk/`:
+
+```bash
+npm run verify-mint -- <NEW_QX_MINT>
+npm run verify-vault -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>
+```
+
+Use these to confirm:
+
+- the final mint has the expected `Tokenkeg` shape
+- the reserve vault mint equals the final `new QX` mint
+- the reserve vault owner equals the migrator vault authority PDA
+
 ## Example Bags Token Reference
 
 On `2026-03-22`, the Bags token below passed the `Tokenkeg` shape check:

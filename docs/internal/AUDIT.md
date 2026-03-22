@@ -19,6 +19,7 @@ Current implementation status:
 - `set_pause` implemented
 - `migrate_exact` implemented
 - manual TypeScript SDK implemented
+- operational verification scripts implemented for mint and reserve vault checks
 - `Tokenkeg only` policy documented explicitly
 - `cargo test` passes
 - SDK typecheck passes with `npx tsc --noEmit`
@@ -34,12 +35,14 @@ Current verification coverage:
 - `LiteSVM` insufficient reserve rejection
 - `LiteSVM` closed-window rejection
 - `LiteSVM` wrong old mint rejection
+- `LiteSVM` wrong new mint rejection
+- `LiteSVM` wrong vault rejection
 
 What is still missing before mainnet confidence:
 
-- failure-path tests for wrong vault account and wrong new mint at transaction level
 - devnet dry-run with published addresses
 - final Bags mint verification against the `Tokenkeg` checklist
+- final reserve vault verification against the PDA checklist
 
 ## Critical Risks
 

@@ -16,6 +16,8 @@ Provide a tiny manual TypeScript SDK with:
 Implemented in:
 
 - `sdk/src/index.ts`
+- `sdk/src/verifyMint.ts`
+- `sdk/src/verifyReserveVault.ts`
 
 Expected functions:
 
@@ -35,3 +37,10 @@ The frontend can then handle:
 - transaction assembly
 - explorer links
 - verification UI
+
+Operational verification commands:
+
+```bash
+npm run verify-mint -- <NEW_QX_MINT>
+npm run verify-vault -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>
+```
