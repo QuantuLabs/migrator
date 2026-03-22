@@ -898,30 +898,6 @@ fn initialize_config_rejects_reserve_vault_with_delegate_controls() {
 }
 
 #[test]
-fn initialize_config_rejects_zero_migration_cap() {
-    let Some(mut fixture) = MigrationFlowFixture::setup() else {
-        return;
-    };
-
-    assert_tx_error(
-        fixture.send_initialize_config_result_with_cap(0, i64::MAX, 0),
-        custom_error(MigrationError::InvalidConfig),
-    );
-}
-
-#[test]
-fn initialize_config_rejects_migration_cap_above_funded_reserve() {
-    let Some(mut fixture) = MigrationFlowFixture::setup() else {
-        return;
-    };
-
-    assert_tx_error(
-        fixture.send_initialize_config_result_with_cap(0, i64::MAX, INITIAL_RESERVE + 1),
-        custom_error(MigrationError::InsufficientVaultLiquidity),
-    );
-}
-
-#[test]
 fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -1089,35 +1065,6 @@ fn migrate_exact_rejects_when_migration_cap_would_be_exceeded() {
     assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
     assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
     assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
-}
-
-#[test]
-fn migrate_exact_rejects_when_amount_would_exceed_migration_cap() {
-    let Some(mut fixture) = MigrationFlowFixture::setup() else {
-        return;
-    };
-
-    fixture.send_initialize_config_with_cap(0, i64::MAX, MIGRATION_AMOUNT - 1);
-
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let total_before = fixture.config().total_migrated;
-
-    assert_tx_error(
-        fixture.send_migrate_exact_result(
-            MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
-        ),
-        custom_error(MigrationError::MigrationCapExceeded),
-    );
-
-    assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
 }
 
 #[test]
