@@ -834,7 +834,7 @@ fn initialize_config_rejects_reinitialization_without_mutating_config() {
     let config_before = fixture.config();
 
     assert_tx_error(
-        fixture.send_initialize_config_result(0, i64::MAX),
+        fixture.send_initialize_config_result(1, i64::MAX),
         TransactionError::InstructionError(0, InstructionError::IllegalOwner),
     );
 

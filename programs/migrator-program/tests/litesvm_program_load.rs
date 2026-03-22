@@ -114,12 +114,13 @@ fn assert_invalid_ix_error(data: Vec<u8>, expected: TransactionError) {
 }
 
 #[test]
+#[allow(deprecated)]
 fn load_program_and_reject_invalid_instruction_call_with_exact_error() {
     let mut data = vec![2u8];
     data.extend_from_slice(&1u64.to_le_bytes());
     assert_invalid_ix_error(
         data,
-        TransactionError::InstructionError(0, InstructionError::MissingAccount),
+        TransactionError::InstructionError(0, InstructionError::NotEnoughAccountKeys),
     );
 }
 
