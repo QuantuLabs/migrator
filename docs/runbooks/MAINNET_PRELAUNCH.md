@@ -40,6 +40,7 @@ Verify and publish these exact addresses:
 - deployed config verification script passes
 - program authority verification script passes
 - reserve proof script passes with the approved eligible-supply input
+- approved eligible-supply input exactly matches the `migration_cap` that will be initialized on-chain
 - config PDA and vault PDA re-derive correctly from the chosen program id
 - reserve vault owner is the vault PDA
 - reserve vault mint is the final `new QX` mint
@@ -54,7 +55,11 @@ Verify and publish these exact addresses:
 - official docs list exact addresses and explorer links
 - emergency pause instructions are prepared
 - reserve-proof artifact is completed and reviewed
+- planned `migration_cap` equals the reviewed eligible raw-unit total
 - published config state matches the runbook address set exactly
+- old-token deprecation notice is ready
+- any controlled old-token liquidity removal or disablement plan is ready
+- official routing, bots, and docs stop pointing users to the old pool when migration opens
 
 ## Governance Checks
 

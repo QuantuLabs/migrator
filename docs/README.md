@@ -12,6 +12,7 @@ This repository separates public handoff documents from internal planning and op
 
 - `handoff/PROGRAM_SPEC.md`
 - `internal/AUDIT.md`
+- `internal/SECURITY_BASELINE.md`
 - `internal/PLAN_9_DAYS.md`
 - `internal/checklists/TOKENKEG_ONLY_CHECKLIST.md`
 - `runbooks/MAINNET_PRELAUNCH.md`

@@ -28,7 +28,7 @@ Token policy:
 
 ## Instructions
 
-### 0. `initialize_config(start_ts: i64, end_ts: i64)`
+### 0. `initialize_config(start_ts: i64, end_ts: i64, migration_cap: u64)`
 
 Admin-only one-time initialization.
 
@@ -38,6 +38,7 @@ Purpose:
 - bind the program to the immutable mint pair
 - bind the reserve vault
 - store the live migration window
+- bind an immutable total migration cap
 
 Expected accounts:
 
@@ -66,6 +67,8 @@ Required checks:
 - reserve vault mint equals `new QX`
 - reserve vault owner equals vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
+- `migration_cap > 0`
+- reserve vault balance is at least `migration_cap`
 - `start_ts <= end_ts`
 
 ### 1. `set_pause(paused: bool)`
@@ -112,6 +115,7 @@ Required checks:
 - reserve vault owner is vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
 - reserve vault balance is at least `amount_in`
+- `config.total_migrated + amount_in <= migration_cap`
 
 Effects:
 
@@ -123,6 +127,7 @@ Effects:
 Important runtime note:
 
 - the transaction is atomic, so if the transfer fails after the burn CPI, the whole transaction reverts
+- `migration_cap` is stored in `reserved[0..8]` to keep the binary layout size stable in V1
 
 ## PDA Seeds
 
@@ -155,7 +160,7 @@ Padding note:
 | total_migrated | `u64` |
 | start_ts | `i64` |
 | end_ts | `i64` |
-| reserved | `[u8; 64]` |
+| reserved | `[u8; 64]` (`reserved[0..8]` = `migration_cap`) |
 
 ## Invariants
 
@@ -163,9 +168,10 @@ Padding note:
 2. `config.new_qx_mint` never changes after init.
 3. `config.vault_new_qx` never changes after init.
 4. `total_migrated` is monotonic.
-5. Program never mints `new QX`; it only transfers from a pre-funded reserve.
-6. Program never transfers `old QX` anywhere; it only burns it.
-7. Program never accepts a caller-provided authority or destination without validating it against config and PDA seeds.
+5. `total_migrated <= migration_cap`.
+6. Program never mints `new QX`; it only transfers from a pre-funded reserve.
+7. Program never transfers `old QX` anywhere; it only burns it.
+8. Program never accepts a caller-provided authority or destination without validating it against config and PDA seeds.
 
 ## Frontend Contract
 
@@ -187,13 +193,14 @@ Instruction encoding:
 
 Initial discriminator map:
 
-- `0` => `initialize_config(start_ts, end_ts)`
+- `0` => `initialize_config(start_ts, end_ts, migration_cap)`
 - `1` => `set_pause(paused)`
 - `2` => `migrate_exact(amount_in)`
 
 ## Ops Notes
 
 - `vault_new_qx` should be funded before public launch
+- `migration_cap` should equal the approved eligible old-token raw-unit total
 - the final Bags mint must be verified as `Tokenkeg` before mainnet initialization
 - public docs must publish:
   - program id

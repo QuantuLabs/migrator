@@ -35,6 +35,7 @@ In scope for V1:
 - `1:1` migration from `old QX` to `new QX`
 - `Tokenkeg` only (`spl-token` classic, not `Token-2022`)
 - pre-funded reserve vault for `new QX`
+- immutable on-chain migration cap tied to approved eligible supply
 - atomic burn + transfer
 - pause switch
 - public config/state readable off-chain
@@ -66,7 +67,7 @@ Out of scope for V1:
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
-- `LiteSVM` migration-flow suite currently covers `23` end-to-end cases
+- `LiteSVM` migration-flow suite currently covers `30` end-to-end cases
 - `cargo kani -p migrator-program --features no-entrypoint` passes
 
 ## Mint Policy

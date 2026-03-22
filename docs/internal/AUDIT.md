@@ -54,9 +54,13 @@ Current verification coverage:
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
 - negative transaction tests assert the exact `TransactionError` / custom error code, not just `.is_err()`
+- transaction-level malformed entrypoint payload tests cover empty data, bad discriminator, short migrate payload, short initialize payload, and invalid set-pause payload
 - `Kani` proof: migration gate matches the control policy for all symbolic timestamps
 - `Kani` proof: migration window boundaries are inclusive
 - `Kani` proofs: config layout stability, strict mint policy, token-account parsing, custody-account control checks
+- `Kani` proof: migration-cap helpers roundtrip and reject over-cap states
+- `Kani` proof: `checked_total_migrated_after` matches `checked_add`
+- `Kani` proof: unaligned config write/read roundtrip preserves the value
 
 What is still missing before mainnet confidence:
 
@@ -66,6 +70,8 @@ What is still missing before mainnet confidence:
 - recorded reserve-proof artifact with reviewer sign-off
 - explicit upgrade-authority lock/freeze/transfer execution before public launch
 - finalized publication flow using the config/program-authority verification scripts
+- verified-build publication and public source linkage
+- fuzzing lane with `Mollusk` or `Trident`
 
 ## Critical Risks
 
@@ -78,6 +84,8 @@ Risk:
 Mitigation:
 
 - compute eligible old supply before public commitment
+- bind that approved raw-unit total into `migration_cap` during `initialize_config`
+- require reserve vault balance to cover `migration_cap` at initialization time
 - publish reserve vault address before launch
 - keep `new QX` reserve segregated from all other treasury balances
 - do not announce universal `1:1` without proof
@@ -186,11 +194,15 @@ Current decision:
 Risk:
 
 - even a perfect migrator does not kill the old market by itself.
+- if legacy liquidity remains while circulating old supply gets burned away, the old market can become thinner and easier to manipulate
+- that can create a misleading legacy price increase and a fake market-cap signal during migration
 
 Mitigation:
 
 - deprecate the old token publicly
 - remove any controlled old liquidity if applicable
+- stop routing any official UI, bot, or docs toward the old pool once migration opens
+- communicate that legacy price action is non-canonical after launch
 - make the official site and docs point to the new mint only
 
 ## Medium Risks
@@ -218,6 +230,7 @@ Mitigation:
 - publish upgrade authority policy
 - record the exact authority state and transition signature in the prelaunch runbook
 - keep the instruction surface minimal
+- if possible, freeze or clear upgrade authority immediately after successful init and verify it with the authority script
 
 ### M3. Log observability
 
@@ -247,6 +260,8 @@ Mitigation:
 
 That is a reasonable tradeoff for this migration program, but not for a large evolving product surface.
 
+See also `SECURITY_BASELINE.md` for the official-practice mapping and external tooling shortlist.
+
 ## Formal Verification Notes
 
 Current `Kani` scope is intentionally narrow and useful:
@@ -256,6 +271,7 @@ Current `Kani` scope is intentionally narrow and useful:
 - it proves strict mint parsing rejects authority flags
 - it proves token-account parsing rejects wrong owners and uninitialized accounts
 - it proves custody-account parsing rejects delegate and close-authority controls
+- it proves migration-cap helpers reject any state that would exceed the bound
 - it proves the config layout constants remain stable
 
 Current `Kani` scope does not cover:
