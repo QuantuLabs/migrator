@@ -1,0 +1,15 @@
+{
+  "name": "@castercorp/migrator-program-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "verify-mint": "node --experimental-strip-types src/verifyMint.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.2"
+  }
+}
