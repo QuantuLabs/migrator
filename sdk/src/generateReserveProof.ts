@@ -1,50 +1,15 @@
-import { Commitment, Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 
 import {
   TOKEN_PROGRAM_ID,
   findVaultAuthorityPda,
 } from "./index.ts";
-
-const MINT_LEN = 82;
-const TOKEN_ACCOUNT_LEN = 165;
-
-function resolveCommitment(): Commitment {
-  const commitment = (process.env.SOLANA_COMMITMENT || "finalized") as Commitment;
-  if (!["processed", "confirmed", "finalized"].includes(commitment)) {
-    throw new Error(`Invalid SOLANA_COMMITMENT: ${commitment}`);
-  }
-  return commitment;
-}
-
-function parseMintData(data: Buffer) {
-  if (data.length !== MINT_LEN) {
-    throw new Error(`Mint data must be ${MINT_LEN} bytes, got ${data.length}`);
-  }
-
-  return {
-    mintAuthorityOption: data.readUInt32LE(0),
-    supply: data.readBigUInt64LE(36),
-    decimals: data[44],
-    isInitialized: data[45] === 1,
-    freezeAuthorityOption: data.readUInt32LE(46),
-  };
-}
-
-function parseTokenAccountData(data: Buffer) {
-  if (data.length !== TOKEN_ACCOUNT_LEN) {
-    throw new Error(`Token account data must be ${TOKEN_ACCOUNT_LEN} bytes, got ${data.length}`);
-  }
-
-  return {
-    mint: new PublicKey(data.subarray(0, 32)).toBase58(),
-    owner: new PublicKey(data.subarray(32, 64)).toBase58(),
-    amount: data.readBigUInt64LE(64),
-    delegateOption: data.readUInt32LE(72),
-    state: data[108],
-    delegatedAmount: data.readBigUInt64LE(121),
-    closeAuthorityOption: data.readUInt32LE(129),
-  };
-}
+import {
+  parseMintData,
+  parseTokenAccountData,
+  resolveCommitment,
+  verifyFundingSignature,
+} from "./releaseUtils.ts";
 
 async function main() {
   const programIdArg = process.argv[2];
@@ -87,6 +52,16 @@ async function main() {
   const mint = parseMintData(mintInfo.data);
   const reserve = parseTokenAccountData(reserveInfo.data);
   const reserveGteEligible = reserve.amount >= eligibleRawUnits;
+  const fundingCheck =
+    fundingSignature === null
+      ? null
+      : await verifyFundingSignature(
+          connection,
+          fundingSignature,
+          reserveVault,
+          newMint,
+          commitment,
+        );
 
   const checks = {
     mintOwnedByTokenkeg: mintInfo.owner.equals(TOKEN_PROGRAM_ID),
@@ -102,8 +77,15 @@ async function main() {
     reserveDelegatedAmountCleared: reserve.delegatedAmount === 0n,
     reserveCloseAuthorityCleared: reserve.closeAuthorityOption === 0,
     reserveCoversEligibleSupply: reserveGteEligible,
+    fundingSignatureExists: fundingCheck === null ? null : fundingCheck.transactionFound,
+    fundingSignatureTouchesReserveVault:
+      fundingCheck === null ? null : fundingCheck.reserveVaultSeen,
+    fundingSignatureMintMatchesNewMint:
+      fundingCheck === null ? null : fundingCheck.mintMatchesExpected,
+    fundingSignatureDeltaPositive:
+      fundingCheck === null ? null : BigInt(fundingCheck.reserveDeltaRaw ?? "0") > 0n,
   };
-  const ok = Object.values(checks).every(Boolean);
+  const ok = Object.values(checks).every((value) => value !== false);
 
   console.log(
     JSON.stringify(
@@ -113,6 +95,7 @@ async function main() {
         commitment,
         slot,
         fundingSignature,
+        fundingSignatureObservation: fundingCheck,
         programId: programId.toBase58(),
         newMint: newMint.toBase58(),
         reserveVault: reserveVault.toBase58(),

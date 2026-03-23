@@ -6,14 +6,19 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.ts",
     "typecheck": "tsc --noEmit",
     "verify-mint": "node --experimental-strip-types src/verifyMint.ts",
     "verify-vault": "node --experimental-strip-types src/verifyReserveVault.ts",
     "verify-config": "node --experimental-strip-types src/verifyConfig.ts",
     "verify-program-authority": "node --experimental-strip-types src/verifyProgramAuthority.ts",
-    "reserve-proof": "node --experimental-strip-types src/generateReserveProof.ts"
+    "reserve-proof": "node --experimental-strip-types src/generateReserveProof.ts",
+    "validate-mainnet-inputs": "node --experimental-strip-types src/validateMainnetInputs.ts"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0"
   }
 }

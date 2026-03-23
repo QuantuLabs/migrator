@@ -1,38 +1,19 @@
-import { Commitment, Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 
-export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const MINT_LEN = 82;
-
-function parseMintData(data: Buffer) {
-  if (data.length < MINT_LEN) {
-    throw new Error(`Mint data too short: expected at least ${MINT_LEN}, got ${data.length}`);
-  }
-
-  return {
-    mintAuthorityOption: data.readUInt32LE(0),
-    supply: data.readBigUInt64LE(36),
-    decimals: data[44],
-    isInitialized: data[45] === 1,
-    freezeAuthorityOption: data.readUInt32LE(46),
-  };
-}
+import { MINT_LEN, parseMintData, resolveCommitment } from "./releaseUtils.ts";
 
 async function main() {
   const mintArg = process.argv[2];
   const expectedDecimalsArg = process.argv[3];
   const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
-  const commitment = (process.env.SOLANA_COMMITMENT || "finalized") as Commitment;
+  const commitment = resolveCommitment();
 
-  if (!mintArg) {
-    throw new Error("Usage: node src/verifyMint.ts <MINT_ADDRESS> [EXPECTED_DECIMALS]");
-  }
-  if (!["processed", "confirmed", "finalized"].includes(commitment)) {
-    throw new Error(`Invalid SOLANA_COMMITMENT: ${commitment}`);
+  if (!mintArg || expectedDecimalsArg === undefined) {
+    throw new Error("Usage: node src/verifyMint.ts <MINT_ADDRESS> <EXPECTED_DECIMALS>");
   }
 
-  const expectedDecimals =
-    expectedDecimalsArg === undefined ? null : Number.parseInt(expectedDecimalsArg, 10);
-  if (expectedDecimalsArg !== undefined && Number.isNaN(expectedDecimals)) {
+  const expectedDecimals = Number.parseInt(expectedDecimalsArg, 10);
+  if (Number.isNaN(expectedDecimals)) {
     throw new Error(`Invalid expected decimals: ${expectedDecimalsArg}`);
   }
 
@@ -47,12 +28,12 @@ async function main() {
 
   const parsed = parseMintData(info.data);
   const checks = {
-    tokenkegOwner: info.owner.equals(TOKEN_PROGRAM_ID),
+    tokenkegOwner: info.owner.equals(new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")),
     accountLength82: info.data.length === MINT_LEN,
     isInitialized: parsed.isInitialized,
     mintAuthorityDisabled: parsed.mintAuthorityOption === 0,
     freezeAuthorityDisabled: parsed.freezeAuthorityOption === 0,
-    decimalsMatchExpected: expectedDecimals === null ? null : parsed.decimals === expectedDecimals,
+    decimalsMatchExpected: parsed.decimals === expectedDecimals,
   };
   const ok = Object.values(checks).every((value) => value !== false);
 

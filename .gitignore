@@ -40,3 +40,6 @@ test-ledger/
 # Misc outputs
 coverage/
 *.log
+/artifacts/
+/release/*.local.json
+/release/*.generated.json

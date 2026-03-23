@@ -23,12 +23,27 @@ async function main() {
   const reserveVaultArg = process.argv[5];
   const opsAdminArg = process.argv[6];
   const migrationCapArg = process.argv[7];
+  const startTsArg = process.argv[8];
+  const endTsArg = process.argv[9];
+  const pausedArg = process.argv[10];
+  const totalMigratedArg = process.argv[11];
   const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
   const commitment = resolveCommitment();
 
-  if (!programIdArg || !oldMintArg || !newMintArg || !reserveVaultArg || !opsAdminArg || !migrationCapArg) {
+  if (
+    !programIdArg ||
+    !oldMintArg ||
+    !newMintArg ||
+    !reserveVaultArg ||
+    !opsAdminArg ||
+    !migrationCapArg ||
+    startTsArg === undefined ||
+    endTsArg === undefined ||
+    pausedArg === undefined ||
+    totalMigratedArg === undefined
+  ) {
     throw new Error(
-      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW>",
+      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW>",
     );
   }
 
@@ -39,6 +54,13 @@ async function main() {
   const reserveVault = new PublicKey(reserveVaultArg);
   const opsAdmin = new PublicKey(opsAdminArg);
   const migrationCap = BigInt(migrationCapArg);
+  const startTs = BigInt(startTsArg);
+  const endTs = BigInt(endTsArg);
+  const paused = pausedArg === "true" ? true : pausedArg === "false" ? false : null;
+  const totalMigrated = BigInt(totalMigratedArg);
+  if (paused === null) {
+    throw new Error(`Invalid paused flag: ${pausedArg}`);
+  }
   const [configPda, configBump] = findMigrationConfigPda(programId);
   const [vaultAuthority, vaultAuthorityBump] = findVaultAuthorityPda(programId);
 
@@ -66,6 +88,10 @@ async function main() {
     configBumpMatches: config.bump === configBump,
     vaultAuthorityBumpMatches: config.vaultAuthorityBump === vaultAuthorityBump,
     migrationCapMatches: config.migrationCap === migrationCap,
+    startTsMatches: config.startTs === startTs,
+    endTsMatches: config.endTs === endTs,
+    pausedMatches: config.paused === paused,
+    totalMigratedMatches: config.totalMigrated === totalMigrated,
   };
   const ok = Object.values(checks).every(Boolean);
 
@@ -83,6 +109,10 @@ async function main() {
         expectedReserveVault: reserveVault.toBase58(),
         expectedOpsAdmin: opsAdmin.toBase58(),
         expectedMigrationCap: migrationCap.toString(),
+        expectedStartTs: startTs.toString(),
+        expectedEndTs: endTs.toString(),
+        expectedPaused: paused,
+        expectedTotalMigrated: totalMigrated.toString(),
         config: {
           version: config.version,
           bump: config.bump,

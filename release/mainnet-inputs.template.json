@@ -1,0 +1,29 @@
+{
+  "cluster": "mainnet-beta",
+  "rpcUrl": "https://api.mainnet-beta.solana.com",
+  "expectConfigInitialized": false,
+  "programId": "REPLACE_PROGRAM_ID",
+  "oldQxMint": "REPLACE_OLD_QX_MINT",
+  "newQxMint": "REPLACE_NEW_QX_MINT",
+  "reserveVault": "REPLACE_RESERVE_VAULT",
+  "opsAdmin": "REPLACE_OPS_ADMIN",
+  "initializerAuthority": "REPLACE_INITIALIZER_AUTHORITY",
+  "expectedUpgradeAuthority": "REPLACE_EXPECTED_UPGRADE_AUTHORITY_OR_NULL",
+  "migrationCapRaw": "REPLACE_MIGRATION_CAP_RAW",
+  "eligibleRawUnits": "REPLACE_ELIGIBLE_RAW_UNITS",
+  "expectedDecimals": 9,
+  "startTs": "REPLACE_START_TS",
+  "endTs": "REPLACE_END_TS",
+  "expectedPaused": false,
+  "expectedTotalMigratedRaw": "0",
+  "fundingSignature": null,
+  "verifiedBuild": {
+    "libraryName": "migrator_program",
+    "mountPath": ".",
+    "arch": "v0",
+    "programSoPath": "target/deploy/migrator_program.so",
+    "expectedExecutableHash": "REPLACE_EXECUTABLE_HASH",
+    "repoUrl": null,
+    "commitHash": "REPLACE_GIT_COMMIT_HASH"
+  }
+}
