@@ -13,6 +13,10 @@ use crate::{errors::MigrationError, TOKEN_PROGRAM_ID};
 const MINT_LEN: usize = 82;
 const TOKEN_ACCOUNT_STATE_OFFSET: usize = 108;
 const TOKEN_ACCOUNT_LEN_FULL: usize = 165;
+const NATIVE_MINT_ID: [u8; 32] = [
+    6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
+    26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
@@ -132,6 +136,9 @@ pub fn validate_old_mint_account(
     mint: &AccountView,
     expected_mint: &[u8; 32],
 ) -> Result<u8, ProgramError> {
+    if expected_mint == &NATIVE_MINT_ID {
+        return Err(MigrationError::InvalidOldMint.into());
+    }
     validate_strict_mint_account(mint, expected_mint, MigrationError::InvalidOldMint)
 }
 

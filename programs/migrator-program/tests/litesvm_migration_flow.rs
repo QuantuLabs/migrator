@@ -20,6 +20,10 @@ const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
 const VAULT_NEW_QX_BYTES: [u8; 32] = [43u8; 32];
 const USER_OLD_QX_BYTES: [u8; 32] = [44u8; 32];
 const USER_NEW_QX_BYTES: [u8; 32] = [45u8; 32];
+const NATIVE_MINT_BYTES: [u8; 32] = [
+    6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
+    26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
+];
 
 const INITIAL_RESERVE: u64 = 1_000;
 const INITIAL_USER_OLD_BALANCE: u64 = 250;
@@ -865,6 +869,51 @@ fn initialize_config_rejects_same_old_and_new_mint() {
             fixture.program_data,
         ),
         custom_error(MigrationError::InvalidConfig),
+    );
+}
+
+#[test]
+fn initialize_config_rejects_native_old_mint() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    let native_mint = Address::new_from_array(NATIVE_MINT_BYTES);
+    fixture
+        .svm
+        .set_account(
+            native_mint,
+            Account {
+                lamports: 1_000_000,
+                data: make_mint_data(INITIAL_USER_OLD_BALANCE, 9),
+                owner: Address::new_from_array(TOKEN_PROGRAM_ID),
+                executable: false,
+                rent_epoch: 0,
+            },
+        )
+        .expect("native mint stand-in should be set");
+
+    assert_tx_error(
+        fixture.send_initialize_config_with_accounts_result(
+            0,
+            i64::MAX,
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            native_mint,
+            fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+            fixture.program_data,
+        ),
+        custom_error(MigrationError::InvalidOldMint),
+    );
+
+    let account = fixture
+        .svm
+        .get_account(&fixture.config_pda)
+        .expect("config placeholder account should exist");
+    assert!(
+        account.data.is_empty(),
+        "config should remain uninitialized"
     );
 }
 
