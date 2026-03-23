@@ -166,6 +166,7 @@ Expected accounts:
 
 Required checks:
 
+- `config.paused == false`
 - `now > end_ts`
 - `config.unclaimed_withdrawn == false`
 - config PDA and vault PDA seeds re-derive on-chain

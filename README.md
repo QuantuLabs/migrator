@@ -148,7 +148,7 @@ That means:
 
 - it sweeps the entire reserve ATA balance after expiry, not just `migration_cap - total_migrated`
 - any post-init surplus sent into the reserve ATA is not usable during migration and is returned only at closeout
-- it is permissionless to trigger once the window is over
+- it is permissionless to trigger once the window is over, unless `paused` is still set
 - it marks the closeout as one-shot on-chain
 - it sends the reclaimed amount to the canonical ATA for the configured refund wallet
 - in V1, `initialize_config` binds that refund wallet to `funding_authority`

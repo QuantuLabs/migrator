@@ -2337,6 +2337,33 @@ fn withdraw_unclaimed_rejects_before_deadline() {
 }
 
 #[test]
+fn withdraw_unclaimed_rejects_when_paused_even_after_deadline() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, 10);
+    fixture.send_migrate_exact(MIGRATION_AMOUNT);
+    fixture.send_set_pause(true);
+    fixture.set_config_window(-1, -1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_result(),
+        custom_error(MigrationError::ProtocolPaused),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
 fn withdraw_unclaimed_rejects_at_exact_end_boundary_without_mutation() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;

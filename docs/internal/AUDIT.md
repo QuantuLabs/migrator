@@ -91,9 +91,10 @@ Current verification coverage:
 - `LiteSVM` withdraw_unclaimed wrong-vault rejection
 - `LiteSVM` withdraw_unclaimed sweep with extra surplus present in the vault
 - `LiteSVM` withdraw_unclaimed sweep of the remaining vault balance even when the vault is underfunded vs. `migration_cap - total_migrated`
+- `LiteSVM` withdraw_unclaimed paused rejection after expiry
 - `LiteSVM` withdraw_unclaimed permissionless third-party caller success path
 - `LiteSVM` withdraw_unclaimed one-shot rejection after the closeout flag is set
-- `Mollusk` withdraw_unclaimed happy path and strict-deadline rejection
+- `Mollusk` withdraw_unclaimed happy path, strict-deadline rejection, and paused-after-expiry rejection
 - release validators now gate `refundRecipient` and `unclaimedWithdrawn`
 - `Mollusk` successful `initialize_config` with inner-instruction tracking
 - `Mollusk` rejected `initialize_config` when `migration_cap > reserve`

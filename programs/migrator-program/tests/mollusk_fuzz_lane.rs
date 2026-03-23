@@ -1073,6 +1073,67 @@ fn mollusk_withdraw_unclaimed_rejects_at_deadline_without_mutation() {
 }
 
 #[test]
+fn mollusk_withdraw_unclaimed_rejects_when_paused_after_expiry() {
+    let program_id = Pubkey::new_unique();
+    let Some(mollusk) = setup_mollusk(&program_id) else {
+        return;
+    };
+
+    let fixture = base_accounts(program_id);
+    let init_accounts = process_instruction(
+        &mollusk,
+        &fixture.initialize_config_ix(0, 10, MIGRATION_CAP),
+        &fixture.accounts,
+        &[Check::success()],
+    );
+    let migrate_accounts = process_instruction(
+        &mollusk,
+        &fixture.migrate_exact_ix(MIGRATION_AMOUNT),
+        &init_accounts,
+        &[Check::success()],
+    );
+    let paused_accounts = process_instruction(
+        &mollusk,
+        &fixture.set_pause_ix(true),
+        &migrate_accounts,
+        &[Check::success()],
+    );
+
+    let mut expired_accounts = paused_accounts;
+    set_config_window_in_accounts(&mut expired_accounts, &fixture.config_pda, -1, -1);
+
+    let reserve_before = token_amount(account_by_key(&expired_accounts, &fixture.vault_new_qx));
+    let refund_before = token_amount(account_by_key(
+        &expired_accounts,
+        &fixture.refund_recipient_new_qx,
+    ));
+
+    let closeout_accounts = process_instruction(
+        &mollusk,
+        &fixture.withdraw_unclaimed_ix(),
+        &expired_accounts,
+        &[Check::err(migration_error(MigrationError::ProtocolPaused))],
+    );
+
+    assert_eq!(
+        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        reserve_before
+    );
+    assert_eq!(
+        token_amount(account_by_key(
+            &closeout_accounts,
+            &fixture.refund_recipient_new_qx
+        )),
+        refund_before
+    );
+    let config =
+        migration_config_from_bytes(account_by_key(&closeout_accounts, &fixture.config_pda).data());
+    assert_eq!(config.total_migrated, MIGRATION_AMOUNT);
+    assert_eq!(config.paused, 1);
+    assert!(!config.unclaimed_withdrawn());
+}
+
+#[test]
 fn mollusk_fixture_roundtrip_replays_initialize_config_success_and_error() {
     let program_id = Pubkey::new_unique();
     let Some(mut mollusk) = setup_mollusk(&program_id) else {

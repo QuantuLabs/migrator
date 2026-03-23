@@ -41,6 +41,9 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     assert_vault_authority_pda(vault_authority, program_id)?;
 
     let config = unsafe { MigrationConfig::from_account_info(config_account, program_id)? };
+    if config.paused != 0 {
+        return Err(MigrationError::ProtocolPaused.into());
+    }
     evaluate_unclaimed_withdrawal_gate(config.end_ts, now_ts()?).map_err(ProgramError::from)?;
     if config.unclaimed_withdrawn() {
         return Err(MigrationError::UnclaimedAlreadyWithdrawn.into());

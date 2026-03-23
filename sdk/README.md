@@ -52,7 +52,7 @@ The frontend can then handle:
 
 `withdraw_unclaimed` notes:
 
-- it is permissionless to trigger after `end_ts`
+- it is permissionless to trigger after `end_ts`, unless `paused` is still set
 - it always pays out to the canonical `new QX` ATA for the configured refund recipient
 - in V1 the refund recipient is set to `fundingAuthority` during `initialize_config`
 - it sweeps the full reserve-vault balance after expiry, including any surplus that was sent there later
