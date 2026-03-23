@@ -70,14 +70,16 @@ Out of scope for V1:
 
 - `cargo test` passes for the workspace
 - `cargo clippy --all-targets --all-features -- -D warnings` passes
+- `sdk/` passes `npm test`
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
-- `LiteSVM` migration-flow suite currently covers `30` end-to-end cases
+- `LiteSVM` migration-flow suite currently covers `36` end-to-end cases
 - `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
 - `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
 - `./scripts/run-verified-build.sh` is the canonical deterministic-build lane
+- `.github/workflows/verified-build.yml` runs the deterministic-build lane on `push`, `pull_request`, and `workflow_dispatch`
 - `./scripts/run-mainnet-dry-run.sh <filled-inputs.json>` is the canonical release-input validator
 
 Current toolchain note:
@@ -88,7 +90,7 @@ Current toolchain note:
 Verified-build lane policy:
 
 - the root `Cargo.toml` exposes the verifier toolchain via `[workspace.metadata.cli]`
-- `./scripts/run-verified-build.sh` requires a clean tracked git state by default
+- `./scripts/run-verified-build.sh` requires a fully clean git worktree by default
 - the script uses an absolute mount path to avoid the `solana-verify 0.4.11` `.` mount-path bug for workspace subcrates
 
 ## Mint Policy
@@ -107,3 +109,14 @@ For mainnet launch controls, follow:
 - `docs/runbooks/MAINNET_DRY_RUN.md`
 - `docs/runbooks/VERIFIED_BUILD.md`
 - `docs/runbooks/UPGRADE_AUTHORITY_POLICY.md`
+
+## Destination Policy
+
+`migrate_exact` now treats `user_new_qx` as the canonical associated token account for
+`(user, new QX mint)`.
+
+That means:
+
+- the destination must be the expected ATA address
+- the destination cannot carry delegate, close-authority, or wrapped-native controls
+- frontend and ops flows must create the ATA before attempting migration

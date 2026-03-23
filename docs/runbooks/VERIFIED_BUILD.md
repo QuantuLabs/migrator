@@ -42,14 +42,20 @@ What it does:
 - runs `solana-verify build <ABSOLUTE_REPO_PATH> --library-name migrator_program`
 - computes the verified executable hash with `solana-verify get-executable-hash`
 - writes machine-readable metadata under `artifacts/verified-build/`
+- records `programSoPath` as a repo-relative path so release manifests stay portable across reviewers and CI runners
 
 Notes:
 
 - the wrapper uses an absolute repo path; `solana-verify` can mis-handle some workspace-relative invocation forms
 - by default it forces `DOCKER_DEFAULT_PLATFORM=linux/amd64` to match the published verifier images
 - override the verifier image explicitly with `SOLANA_VERIFY_BASE_IMAGE=<image>` if the official image map lags behind a supported Solana release
-- the wrapper refuses tracked git changes unless `ALLOW_DIRTY_WORKTREE=1` is set for local debugging
+- the wrapper refuses any dirty git worktree unless `ALLOW_DIRTY_WORKTREE=1` is set for local debugging
 - the repo carries a `solana-program = 2.3.0` marker dependency so `solana-verify` can select an official Docker image even though the production program is written with Pinocchio
+
+CI:
+
+- `.github/workflows/verified-build.yml` runs the same lane on `push`, `pull_request`, and `workflow_dispatch`
+- the workflow uploads both `migrator_program.build-info.json` and the verified `.so` artifact for reviewer diffing
 
 Expected artifact:
 

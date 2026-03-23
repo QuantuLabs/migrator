@@ -24,8 +24,10 @@ Current implementation status:
 - `cargo test` passes
 - `cargo clippy --all-targets --all-features -- -D warnings` passes
 - `./scripts/run-kani-lane.sh` passes for all current `Kani` harnesses
+- `npm test` passes for the SDK and release-report tests
 - SDK typecheck passes with `npx tsc --noEmit`
 - `./scripts/run-mollusk-lane.sh` passes and forces a real SBF-backed `Mollusk` run
+- GitHub Actions now includes a dedicated `verified-build` workflow that runs the deterministic-build lane and uploads the reviewed artifact metadata
 
 Current verification coverage:
 
@@ -62,6 +64,10 @@ Current verification coverage:
 - `LiteSVM` wrong user destination owner rejection
 - `LiteSVM` uninitialized user destination rejection
 - `LiteSVM` wrong user destination mint rejection
+- `LiteSVM` user destination delegate-control rejection
+- `LiteSVM` user destination wrapped-native rejection
+- `LiteSVM` non-ATA destination rejection
+- `LiteSVM` reserve-vault alias rejection on destination account
 - `LiteSVM` rollback when burn CPI fails
 - `LiteSVM` rollback when source balance is insufficient
 - `LiteSVM` rollback when post-burn transfer signing fails
@@ -74,6 +80,7 @@ Current verification coverage:
 - `Mollusk` canonical lane requires a built SBF artifact and cannot silently skip in script mode
 - negative transaction tests assert the exact `TransactionError` / custom error code, not just `.is_err()`
 - transaction-level malformed entrypoint payload tests cover empty data, bad discriminator, short migrate payload, short initialize payload, and invalid set-pause payload
+- SDK release-report tests cover program authority, reserve vault, config, manifest parsing, and mainnet-input parsing helpers
 - `Kani` proof: migration gate matches the control policy for all symbolic timestamps
 - `Kani` proof: migration window boundaries are inclusive
 - `Kani` proofs: config layout stability, strict mint policy, token-account parsing, custody-account control checks
@@ -90,8 +97,7 @@ What is still missing before mainnet confidence:
 - explicit upgrade-authority lock/freeze/transfer execution before public launch
 - finalized publication flow using the config/program-authority verification scripts
 - verified-build publication and public source linkage
-- CI coverage for the verified-build lane itself
-- fixture-driven tests for the mainnet dry-run validator and authority/release scripts
+- fixture-driven tests for the full mainnet dry-run validator against realistic reviewed manifests
 - broader stateful fuzzing beyond the current `Mollusk` lane if the program surface grows
 - upstream `Kani` batch-run stability should be rechecked before restoring the single-command release gate
 
@@ -185,10 +191,13 @@ Mitigation:
 Risk:
 
 - `migrate_exact` fails if `user_new_qx` ATA is missing.
+- V1 now enforces the canonical ATA itself, so a wrong but otherwise well-formed token account is rejected on-chain.
 
 Mitigation:
 
 - frontend auto-creates ATA before migrate
+- the program now verifies the destination address matches the canonical ATA for `(user, new QX mint)`
+- transaction tests cover non-ATA destination, delegate controls, and wrapped-native rejection
 - docs state this clearly
 - add UX copy for wallet state preparation
 
