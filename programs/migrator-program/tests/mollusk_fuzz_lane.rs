@@ -5,7 +5,10 @@ use migrator_program::{
     MIGRATION_CONFIG_SEED, TOKEN_PROGRAM_ID, UPGRADEABLE_LOADER_PROGRAM_ID,
     VAULT_AUTHORITY_SEED,
 };
-use mollusk_svm_programs_token::token::ELF as TOKENKEG_ELF;
+use mollusk_svm_programs_token::{
+    associated_token::{account as associated_token_program_account, add_program as add_associated_token_program},
+    token::ELF as TOKENKEG_ELF,
+};
 use mollusk_svm::{
     program::{
         create_keyed_account_for_builtin_program, create_program_account_loader_v2,
@@ -21,6 +24,10 @@ use solana_program_error::ProgramError;
 use solana_program_option::COption;
 use solana_program_pack::Pack;
 use solana_pubkey::Pubkey;
+use solana_rent::Rent;
+use spl_token_interface::instruction::{
+    initialize_account3, initialize_mint2, mint_to, set_authority, AuthorityType,
+};
 use spl_token_interface::state::{Account as TokenAccount, AccountState, Mint};
 
 const OLD_MINT_BYTES: [u8; 32] = [41u8; 32];
@@ -80,6 +87,7 @@ fn setup_mollusk(program_id: &Pubkey) -> Option<Mollusk> {
         &loader_keys::LOADER_V2,
         TOKENKEG_ELF,
     );
+    add_associated_token_program(&mut mollusk);
     Some(mollusk)
 }
 
@@ -139,6 +147,32 @@ fn associated_token_address(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
     .0
 }
 
+fn create_associated_token_account_instruction(
+    funding_address: &Pubkey,
+    wallet_address: &Pubkey,
+    token_mint_address: &Pubkey,
+    token_program_id: &Pubkey,
+) -> Instruction {
+    Instruction::new_with_bytes(
+        Pubkey::new_from_array(ASSOCIATED_TOKEN_PROGRAM_ID),
+        &[0],
+        vec![
+            AccountMeta::new(*funding_address, true),
+            AccountMeta::new(
+                associated_token_address(wallet_address, token_mint_address),
+                false,
+            ),
+            AccountMeta::new_readonly(*wallet_address, false),
+            AccountMeta::new_readonly(*token_mint_address, false),
+            AccountMeta::new_readonly(
+                Pubkey::from_str_const("11111111111111111111111111111111"),
+                false,
+            ),
+            AccountMeta::new_readonly(*token_program_id, false),
+        ],
+    )
+}
+
 fn account_by_key<'a>(accounts: &'a [(Pubkey, Account)], pubkey: &Pubkey) -> &'a Account {
     accounts
         .iter()
@@ -166,6 +200,17 @@ struct FixtureAccounts {
     user_old_qx: Pubkey,
     user_new_qx: Pubkey,
     system_program: Pubkey,
+}
+
+fn process_instruction(
+    mollusk: &Mollusk,
+    instruction: &Instruction,
+    accounts: &[(Pubkey, Account)],
+    checks: &[Check],
+) -> Vec<(Pubkey, Account)> {
+    mollusk
+        .process_and_validate_instruction(instruction, accounts, checks)
+        .resulting_accounts
 }
 
 impl FixtureAccounts {
@@ -318,6 +363,107 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
             },
         ),
         (token_program, create_program_account_loader_v2(TOKENKEG_ELF)),
+        (system_program, system_program_account),
+        (loader_v1_program, loader_v1_program_account),
+        (loader_v2_program, loader_v2_program_account),
+        (loader_v3_program, loader_v3_program_account),
+    ];
+
+    FixtureAccounts {
+        program_id,
+        accounts,
+        initializer,
+        ops_admin,
+        user,
+        config_pda,
+        vault_authority_pda,
+        program_data,
+        old_qx_mint,
+        new_qx_mint,
+        vault_new_qx,
+        user_old_qx,
+        user_new_qx,
+        system_program,
+    }
+}
+
+fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
+    let initializer = Pubkey::new_unique();
+    let ops_admin = Pubkey::new_unique();
+    let user = Pubkey::new_unique();
+    let loader_program = Pubkey::new_from_array(UPGRADEABLE_LOADER_PROGRAM_ID);
+    let token_program = Pubkey::new_from_array(TOKEN_PROGRAM_ID);
+    let associated_token_program = Pubkey::new_from_array(ASSOCIATED_TOKEN_PROGRAM_ID);
+
+    let (config_pda, _) = Pubkey::find_program_address(&[MIGRATION_CONFIG_SEED], &program_id);
+    let (vault_authority_pda, _) =
+        Pubkey::find_program_address(&[VAULT_AUTHORITY_SEED], &program_id);
+    let (program_data, _) = Pubkey::find_program_address(&[program_id.as_ref()], &loader_program);
+
+    let old_qx_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
+    let new_qx_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
+    let vault_new_qx = Pubkey::new_from_array(VAULT_NEW_QX_BYTES);
+    let user_old_qx = Pubkey::new_from_array(USER_OLD_QX_BYTES);
+    let user_new_qx = associated_token_address(&user, &new_qx_mint);
+    let (system_program, system_program_account) = keyed_account_for_system_program();
+    let (loader_v2_program, loader_v2_program_account) = keyed_account_for_bpf_loader_v2_program();
+    let (loader_v3_program, loader_v3_program_account) = keyed_account_for_bpf_loader_v3_program();
+    let (loader_v1_program, loader_v1_program_account) = create_keyed_account_for_builtin_program(
+        &loader_keys::LOADER_V1,
+        "solana_bpf_loader_deprecated_program",
+    );
+
+    let accounts = vec![
+        (initializer, Account::new(2_000_000_000, 0, &system_program)),
+        (ops_admin, Account::new(1_000_000_000, 0, &system_program)),
+        (user, Account::new(1_000_000_000, 0, &system_program)),
+        (config_pda, Account::default()),
+        (vault_authority_pda, Account::new(1_000_000, 0, &program_id)),
+        (
+            program_data,
+            Account {
+                lamports: 1_000_000_000,
+                data: make_program_data_metadata(initializer),
+                owner: loader_program,
+                executable: false,
+                rent_epoch: 0,
+            },
+        ),
+        (
+            old_qx_mint,
+            Account::new(
+                Rent::default().minimum_balance(Mint::LEN),
+                Mint::LEN,
+                &token_program,
+            ),
+        ),
+        (
+            new_qx_mint,
+            Account::new(
+                Rent::default().minimum_balance(Mint::LEN),
+                Mint::LEN,
+                &token_program,
+            ),
+        ),
+        (
+            vault_new_qx,
+            Account::new(
+                Rent::default().minimum_balance(TokenAccount::LEN),
+                TokenAccount::LEN,
+                &token_program,
+            ),
+        ),
+        (
+            user_old_qx,
+            Account::new(
+                Rent::default().minimum_balance(TokenAccount::LEN),
+                TokenAccount::LEN,
+                &token_program,
+            ),
+        ),
+        (user_new_qx, Account::default()),
+        (token_program, create_program_account_loader_v2(TOKENKEG_ELF)),
+        (associated_token_program, associated_token_program_account()),
         (system_program, system_program_account),
         (loader_v1_program, loader_v1_program_account),
         (loader_v2_program, loader_v2_program_account),
@@ -543,6 +689,168 @@ fn mollusk_migrate_exact_executes_burn_and_transfer_cpis() {
         )),
         reserve_before - MIGRATION_AMOUNT
     );
+}
+
+#[test]
+fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
+    let program_id = Pubkey::new_unique();
+    let Some(mollusk) = setup_mollusk(&program_id) else {
+        return;
+    };
+
+    let fixture = base_accounts_for_real_spl_bootstrap(program_id);
+    let token_program = Pubkey::new_from_array(TOKEN_PROGRAM_ID);
+
+    let mut accounts = fixture.accounts.clone();
+
+    accounts = process_instruction(
+        &mollusk,
+        &initialize_mint2(
+            &token_program,
+            &fixture.old_qx_mint,
+            &fixture.initializer,
+            None,
+            9,
+        )
+        .expect("initialize old mint instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &initialize_mint2(
+            &token_program,
+            &fixture.new_qx_mint,
+            &fixture.initializer,
+            None,
+            9,
+        )
+        .expect("initialize new mint instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &initialize_account3(
+            &token_program,
+            &fixture.vault_new_qx,
+            &fixture.new_qx_mint,
+            &fixture.vault_authority_pda,
+        )
+        .expect("initialize reserve vault instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &initialize_account3(
+            &token_program,
+            &fixture.user_old_qx,
+            &fixture.old_qx_mint,
+            &fixture.user,
+        )
+        .expect("initialize user old account instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &create_associated_token_account_instruction(
+            &fixture.initializer,
+            &fixture.user,
+            &fixture.new_qx_mint,
+            &token_program,
+        ),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &mint_to(
+            &token_program,
+            &fixture.old_qx_mint,
+            &fixture.user_old_qx,
+            &fixture.initializer,
+            &[],
+            INITIAL_USER_OLD_BALANCE,
+        )
+        .expect("mint old qx instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &mint_to(
+            &token_program,
+            &fixture.new_qx_mint,
+            &fixture.vault_new_qx,
+            &fixture.initializer,
+            &[],
+            INITIAL_RESERVE,
+        )
+        .expect("mint new qx reserve instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &set_authority(
+            &token_program,
+            &fixture.old_qx_mint,
+            None,
+            AuthorityType::MintTokens,
+            &fixture.initializer,
+            &[],
+        )
+        .expect("clear old mint authority instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &set_authority(
+            &token_program,
+            &fixture.new_qx_mint,
+            None,
+            AuthorityType::MintTokens,
+            &fixture.initializer,
+            &[],
+        )
+        .expect("clear new mint authority instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+
+    let init_result = mollusk.process_and_validate_instruction(
+        &fixture.initialize_config_ix(0, i64::MAX, MIGRATION_CAP),
+        &accounts,
+        &[Check::success()],
+    );
+    let migrate_result = mollusk.process_and_validate_instruction(
+        &fixture.migrate_exact_ix(MIGRATION_AMOUNT),
+        &init_result.resulting_accounts,
+        &[Check::success()],
+    );
+
+    let config = migration_config_from_bytes(
+        account_by_key(&migrate_result.resulting_accounts, &fixture.config_pda).data(),
+    );
+    assert_eq!(config.total_migrated, MIGRATION_AMOUNT);
+    assert_eq!(config.migration_cap(), MIGRATION_CAP);
+
+    let old_balance_after =
+        token_amount(account_by_key(&migrate_result.resulting_accounts, &fixture.user_old_qx));
+    let new_balance_after =
+        token_amount(account_by_key(&migrate_result.resulting_accounts, &fixture.user_new_qx));
+    let reserve_balance_after =
+        token_amount(account_by_key(&migrate_result.resulting_accounts, &fixture.vault_new_qx));
+
+    assert_eq!(
+        old_balance_after,
+        INITIAL_USER_OLD_BALANCE - MIGRATION_AMOUNT
+    );
+    assert_eq!(new_balance_after, MIGRATION_AMOUNT);
+    assert_eq!(reserve_balance_after, INITIAL_RESERVE - MIGRATION_AMOUNT);
 }
 
 #[test]
