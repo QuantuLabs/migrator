@@ -17,12 +17,19 @@ These are the controls this repository should keep aligned with:
 
 Primary references:
 
-- Solana program security course: owner checks
-- Solana program security course: arbitrary CPI
-- Solana program security course: bump seed canonicalization
-- Solana program security course: reinitialization attacks
-- Solana verified builds guide
-- solana-verifiable-build README guidance for Pinocchio/SDK-v3 projects using `[workspace.metadata.cli]`
+- Solana Foundation developer-content guide: verified builds and public source linkage
+- Pinocchio repository and security policy
+- Mollusk repository for SBF-backed Solana-native testing
+- Ackee Solana Auditors Bootcamp materials for current fuzzing and audit training patterns
+- local `solana-dev` skill security reference used as an implementation checklist
+
+External references checked on `2026-03-23`:
+
+- `https://raw.githubusercontent.com/solana-foundation/developer-content/main/content/guides/advanced/verified-builds.md`
+- `https://github.com/anza-xyz/pinocchio`
+- `https://github.com/anza-xyz/pinocchio/blob/main/SECURITY.MD`
+- `https://github.com/anza-xyz/mollusk`
+- `https://github.com/Ackee-Blockchain/Solana-Auditors-Bootcamp`
 
 ## Pinocchio-Specific Notes
 
