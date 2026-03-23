@@ -125,7 +125,13 @@ struct MigrationFlowFixture {
 
 impl MigrationFlowFixture {
     fn setup() -> Option<Self> {
+        let require_artifact = env::var_os("MIGRATOR_REQUIRE_ARTIFACT").is_some();
         let Some(program_path) = resolve_program_path() else {
+            if require_artifact {
+                panic!(
+                    "[litesvm_migration_flow] required SBF artifact missing. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
+                );
+            }
             eprintln!(
                 "[litesvm_migration_flow] skip: no program artifact found. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
             );

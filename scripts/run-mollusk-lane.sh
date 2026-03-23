@@ -12,7 +12,6 @@ cargo build-sbf \
 
 export SBF_OUT_DIR
 export MOLLUSK_REQUIRE_ARTIFACT=1
-export MOLLUSK_REQUIRE_ARTIFACT=1
 
 if [[ -n "${MOLLUSK_FIXTURE_DIR:-}" ]]; then
   mkdir -p "$MOLLUSK_FIXTURE_DIR"

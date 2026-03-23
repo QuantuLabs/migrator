@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf};
 
 use litesvm::LiteSVM;
+use solana_program as _;
 use solana_account::Account;
 use solana_address::Address;
 use solana_instruction::{error::InstructionError, AccountMeta, Instruction};
@@ -38,7 +39,13 @@ fn resolve_program_path() -> Option<PathBuf> {
 }
 
 fn setup_svm() -> Option<(LiteSVM, Address, Keypair)> {
+    let require_artifact = env::var_os("MIGRATOR_REQUIRE_ARTIFACT").is_some();
     let Some(program_path) = resolve_program_path() else {
+        if require_artifact {
+            panic!(
+                "[litesvm_program_load] required SBF artifact missing. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
+            );
+        }
         eprintln!(
             "[litesvm_program_load] skip: no program artifact found. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
         );
@@ -149,6 +156,17 @@ fn load_program_and_reject_migrate_with_short_amount_payload() {
 }
 
 #[test]
+fn load_program_and_reject_migrate_with_trailing_amount_payload() {
+    let mut data = vec![2u8];
+    data.extend_from_slice(&1u64.to_le_bytes());
+    data.push(0u8);
+    assert_invalid_ix_error(
+        data,
+        TransactionError::InstructionError(0, InstructionError::InvalidInstructionData),
+    );
+}
+
+#[test]
 fn load_program_and_reject_set_pause_with_invalid_bool_payload() {
     let Some((mut svm, program_id, payer)) = setup_svm() else {
         return;
@@ -164,6 +182,31 @@ fn load_program_and_reject_set_pause_with_invalid_bool_payload() {
             AccountMeta::new(config, false),
         ],
         data: vec![1u8, 2u8],
+    };
+
+    let err = send_ix_result(&mut svm, &payer, &[], ix);
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
+    );
+}
+
+#[test]
+fn load_program_and_reject_set_pause_with_trailing_bool_payload() {
+    let Some((mut svm, program_id, payer)) = setup_svm() else {
+        return;
+    };
+
+    let config = Address::new_unique();
+    set_placeholder_system_account(&mut svm, config);
+
+    let ix = Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(payer.pubkey(), true),
+            AccountMeta::new(config, false),
+        ],
+        data: vec![1u8, 1u8, 0u8],
     };
 
     let err = send_ix_result(&mut svm, &payer, &[], ix);
@@ -219,6 +262,67 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
             AccountMeta::new_readonly(program_data, false),
         ],
         data: vec![0u8, 1, 2, 3],
+    };
+
+    let err = send_ix_result(&mut svm, &payer, &[&ops_admin], ix);
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
+    );
+}
+
+#[test]
+fn load_program_and_reject_initialize_with_trailing_window_payload() {
+    let Some((mut svm, program_id, payer)) = setup_svm() else {
+        return;
+    };
+
+    let ops_admin = Keypair::new();
+    set_placeholder_system_account(&mut svm, ops_admin.pubkey());
+
+    let config = Address::new_unique();
+    let vault_authority = Address::new_unique();
+    let vault_new_qx = Address::new_unique();
+    let old_qx_mint = Address::new_unique();
+    let new_qx_mint = Address::new_unique();
+    let token_program = Address::new_unique();
+    let system_program = Address::new_unique();
+    let program_data = Address::new_unique();
+
+    for address in [
+        config,
+        vault_authority,
+        vault_new_qx,
+        old_qx_mint,
+        new_qx_mint,
+        token_program,
+        system_program,
+        program_data,
+    ] {
+        set_placeholder_system_account(&mut svm, address);
+    }
+
+    let mut data = vec![0u8];
+    data.extend_from_slice(&1i64.to_le_bytes());
+    data.extend_from_slice(&2i64.to_le_bytes());
+    data.extend_from_slice(&3u64.to_le_bytes());
+    data.push(0u8);
+
+    let ix = Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(payer.pubkey(), true),
+            AccountMeta::new_readonly(ops_admin.pubkey(), true),
+            AccountMeta::new(config, false),
+            AccountMeta::new_readonly(vault_authority, false),
+            AccountMeta::new(vault_new_qx, false),
+            AccountMeta::new_readonly(old_qx_mint, false),
+            AccountMeta::new_readonly(new_qx_mint, false),
+            AccountMeta::new_readonly(token_program, false),
+            AccountMeta::new_readonly(system_program, false),
+            AccountMeta::new_readonly(program_data, false),
+        ],
+        data,
     };
 
     let err = send_ix_result(&mut svm, &payer, &[&ops_admin], ix);
