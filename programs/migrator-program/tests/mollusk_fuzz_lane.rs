@@ -1,8 +1,9 @@
 use std::{env, path::PathBuf};
 
 use migrator_program::{
-    errors::MigrationError, state::MigrationConfig, MIGRATION_CONFIG_SEED, TOKEN_PROGRAM_ID,
-    UPGRADEABLE_LOADER_PROGRAM_ID, VAULT_AUTHORITY_SEED,
+    errors::MigrationError, state::MigrationConfig, ASSOCIATED_TOKEN_PROGRAM_ID,
+    MIGRATION_CONFIG_SEED, TOKEN_PROGRAM_ID, UPGRADEABLE_LOADER_PROGRAM_ID,
+    VAULT_AUTHORITY_SEED,
 };
 use mollusk_svm_programs_token::token::ELF as TOKENKEG_ELF;
 use mollusk_svm::{
@@ -26,7 +27,6 @@ const OLD_MINT_BYTES: [u8; 32] = [41u8; 32];
 const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
 const VAULT_NEW_QX_BYTES: [u8; 32] = [43u8; 32];
 const USER_OLD_QX_BYTES: [u8; 32] = [44u8; 32];
-const USER_NEW_QX_BYTES: [u8; 32] = [45u8; 32];
 
 const INITIAL_RESERVE: u64 = 1_000;
 const INITIAL_USER_OLD_BALANCE: u64 = 250;
@@ -128,6 +128,15 @@ fn make_token_account_data(mint: &Pubkey, owner: &Pubkey, amount: u64) -> Vec<u8
 
 fn token_amount(account: &Account) -> u64 {
     u64::from_le_bytes(account.data()[64..72].try_into().unwrap())
+}
+
+fn associated_token_address(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
+    let associated_token_program = Pubkey::new_from_array(ASSOCIATED_TOKEN_PROGRAM_ID);
+    Pubkey::find_program_address(
+        &[owner.as_ref(), TOKEN_PROGRAM_ID.as_slice(), mint.as_ref()],
+        &associated_token_program,
+    )
+    .0
 }
 
 fn account_by_key<'a>(accounts: &'a [(Pubkey, Account)], pubkey: &Pubkey) -> &'a Account {
@@ -233,7 +242,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
     let new_qx_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
     let vault_new_qx = Pubkey::new_from_array(VAULT_NEW_QX_BYTES);
     let user_old_qx = Pubkey::new_from_array(USER_OLD_QX_BYTES);
-    let user_new_qx = Pubkey::new_from_array(USER_NEW_QX_BYTES);
+    let user_new_qx = associated_token_address(&user, &new_qx_mint);
     let (system_program, system_program_account) = keyed_account_for_system_program();
     let (loader_v2_program, loader_v2_program_account) = keyed_account_for_bpf_loader_v2_program();
     let (loader_v3_program, loader_v3_program_account) = keyed_account_for_bpf_loader_v3_program();

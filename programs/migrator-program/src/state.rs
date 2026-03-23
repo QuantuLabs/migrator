@@ -8,7 +8,7 @@ use core::{
 
 use pinocchio::{error::ProgramError, AccountView, Address};
 
-use crate::{errors::MigrationError, TOKEN_PROGRAM_ID};
+use crate::{errors::MigrationError, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
 const MINT_LEN: usize = 82;
 const TOKEN_ACCOUNT_STATE_OFFSET: usize = 108;
@@ -52,7 +52,7 @@ impl MigrationConfig {
         if unsafe { account.owner() } != program_id {
             return Err(ProgramError::IllegalOwner);
         }
-        if account.data_len() < Self::SIZE {
+        if account.data_len() != Self::SIZE {
             return Err(ProgramError::InvalidAccountData);
         }
         Ok(())
@@ -91,7 +91,7 @@ impl MigrationConfig {
 
     #[inline(always)]
     pub unsafe fn init(account: &AccountView) -> Result<Self, ProgramError> {
-        if account.data_len() < Self::SIZE {
+        if account.data_len() != Self::SIZE {
             return Err(ProgramError::InvalidAccountData);
         }
 
@@ -147,6 +147,9 @@ pub fn validate_new_mint_account(
     mint: &AccountView,
     expected_mint: &[u8; 32],
 ) -> Result<u8, ProgramError> {
+    if expected_mint == &NATIVE_MINT_ID {
+        return Err(MigrationError::InvalidNewMint.into());
+    }
     validate_strict_mint_account(mint, expected_mint, MigrationError::InvalidNewMint)
 }
 
@@ -223,6 +226,7 @@ pub fn validate_token_account_bytes(
     let mint: &[u8; 32] = data[0..32].try_into().unwrap();
     let owner: &[u8; 32] = data[32..64].try_into().unwrap();
     let state = data[TOKEN_ACCOUNT_STATE_OFFSET];
+    let is_native_option = u32::from_le_bytes(data[109..113].try_into().unwrap());
 
     if mint != expected_mint {
         return Err(MigrationError::InvalidConfig.into());
@@ -232,6 +236,9 @@ pub fn validate_token_account_bytes(
     }
     if state != 1 {
         return Err(MigrationError::AccountNotInitialized.into());
+    }
+    if is_native_option != 0 {
+        return Err(MigrationError::InvalidTokenAccountControls.into());
     }
 
     Ok(())
@@ -268,6 +275,33 @@ pub fn validate_custody_token_account_bytes(
     let close_authority_option = u32::from_le_bytes(data[129..133].try_into().unwrap());
     if delegate_option != 0 || delegated_amount != 0 || close_authority_option != 0 {
         return Err(MigrationError::InvalidTokenAccountControls.into());
+    }
+
+    Ok(())
+}
+
+#[inline(always)]
+pub fn associated_token_address(owner: &Address, mint: &Address) -> Address {
+    let associated_token_program = Address::new_from_array(ASSOCIATED_TOKEN_PROGRAM_ID);
+    Address::find_program_address(
+        &[owner.as_ref(), TOKEN_PROGRAM_ID.as_slice(), mint.as_ref()],
+        &associated_token_program,
+    )
+    .0
+}
+
+#[inline(always)]
+pub unsafe fn validate_destination_token_account(
+    token_account: &AccountView,
+    expected_owner: &Address,
+    expected_mint: &[u8; 32],
+) -> Result<(), ProgramError> {
+    validate_custody_token_account(token_account, expected_mint, expected_owner.as_array())?;
+
+    let expected_ata =
+        associated_token_address(expected_owner, &Address::new_from_array(*expected_mint));
+    if token_account.address() != &expected_ata {
+        return Err(MigrationError::InvalidDestinationTokenAccount.into());
     }
 
     Ok(())

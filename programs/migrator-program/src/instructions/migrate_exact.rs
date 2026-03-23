@@ -9,8 +9,9 @@ use crate::{
     errors::MigrationError,
     state::{
         checked_total_migrated_after, token_amount, validate_custody_token_account,
-        validate_migration_cap, validate_new_mint_account, validate_old_mint_account,
-        validate_token_account, validate_token_program, MigrationConfig,
+        validate_destination_token_account, validate_migration_cap, validate_new_mint_account,
+        validate_old_mint_account, validate_token_account, validate_token_program,
+        MigrationConfig,
     },
     VAULT_AUTHORITY_SEED,
 };
@@ -84,7 +85,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
                 &config.vault_authority,
             )?;
             validate_token_account(user_old_qx, &config.old_qx_mint, user.address().as_array())?;
-            validate_token_account(user_new_qx, &config.new_qx_mint, user.address().as_array())?;
+            validate_destination_token_account(user_new_qx, user.address(), &config.new_qx_mint)?;
             if token_amount(vault_new_qx)? < amount_in {
                 return Err(MigrationError::InsufficientVaultLiquidity.into());
             }
