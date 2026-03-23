@@ -43,3 +43,12 @@ coverage/
 /artifacts/
 /release/*.local.json
 /release/*.generated.json
+/docs/internal/
+/docs/runbooks/MAINNET_PRELAUNCH.md
+/docs/runbooks/EMERGENCY_PAUSE.md
+/docs/runbooks/OLD_MARKET_DEPRECATION.md
+/docs/runbooks/OLD_LP_RETIREMENT.md
+/docs/runbooks/OLD_MARKET_MONITORING.md
+/docs/runbooks/DEPRECATION_EVIDENCE.md
+/release/README.md
+/release/release-record.template.md

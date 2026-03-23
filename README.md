@@ -1,7 +1,5 @@
 # Migrator
 
-Built by **Quantu Labs**. Licensed under **MIT**.
-
 Migrator is a standalone Solana migration engine for strict `1:1` classic SPL
 (`Tokenkeg`) token migrations.
 
@@ -25,10 +23,6 @@ It is designed for high-assurance migrations with a deliberately small surface:
 Out of scope for V1:
 
 - Token-2022 support
-- holder fee sharing
-- on-chain buyback logic
-- rescue automation for LP, vesting, or custody edge cases
-- per-wallet allowlists or Merkle claims
 
 ## Tech Stack
 
@@ -47,19 +41,17 @@ Out of scope for V1:
 - `programs/migrator/` — on-chain program crate
 - `sdk/` — manual TypeScript SDK and release validators
 - `docs/handoff/` — frontend and integrator contract
-- `docs/internal/` — internal audit notes, plans, and checklists
-- `docs/runbooks/` — launch, release, and emergency procedures
-- `release/` — reviewed manifests and release-record templates
+- `docs/runbooks/` — public verification and release procedures
+- `release/` — public launch-manifest template
 - `scripts/` — local assurance, deterministic build, and dry-run wrappers
 
 Start here:
 
 - `docs/handoff/PROGRAM_SPEC.md`
-- `docs/internal/AUDIT.md`
-- `docs/internal/SECURITY_BASELINE.md`
-- `docs/runbooks/MAINNET_PRELAUNCH.md`
 - `docs/runbooks/MAINNET_DRY_RUN.md`
 - `docs/runbooks/VERIFIED_BUILD.md`
+- `docs/runbooks/KANI_LANE.md`
+- `docs/runbooks/MOLLUSK_LANE.md`
 
 ## Current Verification
 
@@ -124,11 +116,8 @@ Old-market policy:
 
 Before mainnet launch, follow:
 
-- `docs/runbooks/MAINNET_PRELAUNCH.md`
 - `docs/runbooks/MAINNET_DRY_RUN.md`
 - `docs/runbooks/VERIFIED_BUILD.md`
 - `docs/runbooks/UPGRADE_AUTHORITY_POLICY.md`
-- `docs/runbooks/OLD_MARKET_DEPRECATION.md`
-- `docs/runbooks/OLD_LP_RETIREMENT.md`
-- `docs/runbooks/OLD_MARKET_MONITORING.md`
-- `docs/runbooks/DEPRECATION_EVIDENCE.md`
+
+Built by **Quantu Labs**. Licensed under **MIT**.
