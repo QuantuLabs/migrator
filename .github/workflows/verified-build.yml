@@ -25,6 +25,8 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: Install solana-verify
         run: |
