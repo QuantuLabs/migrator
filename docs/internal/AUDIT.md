@@ -42,22 +42,28 @@ Current verification coverage:
 - `LiteSVM` initialize_config reserve-vault control rejection
 - `LiteSVM` initialize_config zero migration-cap rejection
 - `LiteSVM` initialize_config migration-cap-above-reserve rejection
+- `LiteSVM` initialize_config first-deploy path using an uninitialized system-owned config PDA placeholder
 - `LiteSVM` migrate_exact happy path with real SPL mint/token account layouts
 - `LiteSVM` paused migration rejection
 - `LiteSVM` insufficient reserve rejection
 - `LiteSVM` migration-cap exceeded rejection
+- `LiteSVM` cumulative migration-cap progression up to the exact cap boundary, then rejection of the next unit
 - `LiteSVM` closed-window rejection
 - `LiteSVM` not-started-window rejection
 - `LiteSVM` wrong old mint rejection
 - `LiteSVM` wrong new mint rejection
 - `LiteSVM` wrong vault rejection
+- `LiteSVM` wrong vault-authority account rejection
+- `LiteSVM` wrong token-program account rejection on `migrate_exact`
 - `LiteSVM` reserve vault delegate-control rejection
 - `LiteSVM` reserve vault close-authority rejection
 - `LiteSVM` zero-amount rejection
+- `LiteSVM` wrong user source owner rejection
 - `LiteSVM` wrong user destination owner rejection
 - `LiteSVM` uninitialized user destination rejection
 - `LiteSVM` wrong user destination mint rejection
 - `LiteSVM` rollback when burn CPI fails
+- `LiteSVM` rollback when source balance is insufficient
 - `LiteSVM` rollback when post-burn transfer signing fails
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
@@ -84,6 +90,8 @@ What is still missing before mainnet confidence:
 - explicit upgrade-authority lock/freeze/transfer execution before public launch
 - finalized publication flow using the config/program-authority verification scripts
 - verified-build publication and public source linkage
+- CI coverage for the verified-build lane itself
+- fixture-driven tests for the mainnet dry-run validator and authority/release scripts
 - broader stateful fuzzing beyond the current `Mollusk` lane if the program surface grows
 - upstream `Kani` batch-run stability should be rechecked before restoring the single-command release gate
 

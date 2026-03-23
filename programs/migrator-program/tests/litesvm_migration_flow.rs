@@ -111,6 +111,15 @@ fn assert_tx_error(tx_result: TransactionResult, expected: TransactionError) {
     assert_eq!(err.err, expected, "logs:\n{}", err.meta.pretty_logs());
 }
 
+fn assert_config_absent_or_uninitialized(fixture: &mut MigrationFlowFixture) {
+    if let Some(account) = fixture.svm.get_account(&fixture.config_pda) {
+        assert!(
+            account.data.is_empty(),
+            "config should remain uninitialized when the PDA placeholder exists"
+        );
+    }
+}
+
 struct MigrationFlowFixture {
     svm: LiteSVM,
     program_id: Address,
@@ -173,15 +182,9 @@ impl MigrationFlowFixture {
 
         svm.set_account(
             config_pda,
-            Account {
-                lamports: 1_000_000_000,
-                data: vec![],
-                owner: Address::default(),
-                executable: false,
-                rent_epoch: 0,
-            },
+            Account::default(),
         )
-        .expect("config PDA placeholder should be set");
+        .expect("config PDA placeholder should be set as an uninitialized system account");
 
         svm.set_account(
             vault_authority_pda,
@@ -400,12 +403,15 @@ impl MigrationFlowFixture {
     }
 
     #[allow(clippy::result_large_err)]
-    fn send_migrate_exact_result(
+    #[allow(clippy::too_many_arguments)]
+    fn send_migrate_exact_with_accounts_result(
         &mut self,
         amount: u64,
+        vault_authority: Address,
         vault_new_qx: Address,
         old_qx_mint: Address,
         new_qx_mint: Address,
+        token_program: Address,
     ) -> TransactionResult {
         let mut data = vec![2u8];
         data.extend_from_slice(&amount.to_le_bytes());
@@ -415,13 +421,13 @@ impl MigrationFlowFixture {
             accounts: vec![
                 AccountMeta::new_readonly(self.user.pubkey(), true),
                 AccountMeta::new(self.config_pda, false),
-                AccountMeta::new_readonly(self.vault_authority_pda, false),
+                AccountMeta::new_readonly(vault_authority, false),
                 AccountMeta::new(vault_new_qx, false),
                 AccountMeta::new(self.user_old_qx, false),
                 AccountMeta::new(self.user_new_qx, false),
                 AccountMeta::new(old_qx_mint, false),
                 AccountMeta::new_readonly(new_qx_mint, false),
-                AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
+                AccountMeta::new_readonly(token_program, false),
             ],
             data,
         };
@@ -432,6 +438,24 @@ impl MigrationFlowFixture {
             .expect("signed tx should be created");
 
         self.svm.send_transaction(tx)
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn send_migrate_exact_result(
+        &mut self,
+        amount: u64,
+        vault_new_qx: Address,
+        old_qx_mint: Address,
+        new_qx_mint: Address,
+    ) -> TransactionResult {
+        self.send_migrate_exact_with_accounts_result(
+            amount,
+            self.vault_authority_pda,
+            vault_new_qx,
+            old_qx_mint,
+            new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+        )
     }
 
     fn send_migrate_exact(&mut self, amount: u64) {
@@ -690,14 +714,7 @@ fn initialize_config_rejects_zero_migration_cap() {
         custom_error(MigrationError::InvalidConfig),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -711,14 +728,7 @@ fn initialize_config_rejects_migration_cap_above_reserve_balance() {
         custom_error(MigrationError::InsufficientVaultLiquidity),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -732,14 +742,7 @@ fn initialize_config_rejects_invalid_timestamp_window() {
         custom_error(MigrationError::InvalidTimestamp),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -754,14 +757,7 @@ fn initialize_config_rejects_mint_decimal_mismatch() {
         custom_error(MigrationError::InvalidConfig),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -778,14 +774,7 @@ fn initialize_config_rejects_upgrade_authority_mismatch() {
         custom_error(MigrationError::Unauthorized),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -801,14 +790,7 @@ fn initialize_config_rejects_program_data_with_wrong_owner() {
         TransactionError::InstructionError(0, InstructionError::IllegalOwner),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -824,14 +806,7 @@ fn initialize_config_rejects_program_data_with_wrong_discriminator() {
         TransactionError::InstructionError(0, InstructionError::InvalidAccountData),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -907,14 +882,7 @@ fn initialize_config_rejects_native_old_mint() {
         custom_error(MigrationError::InvalidOldMint),
     );
 
-    let account = fixture
-        .svm
-        .get_account(&fixture.config_pda)
-        .expect("config placeholder account should exist");
-    assert!(
-        account.data.is_empty(),
-        "config should remain uninitialized"
-    );
+    assert_config_absent_or_uninitialized(&mut fixture);
 }
 
 #[test]
@@ -999,6 +967,43 @@ fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
         INITIAL_USER_OLD_BALANCE - MIGRATION_AMOUNT
     );
     assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), INITIAL_RESERVE);
+}
+
+#[test]
+fn migrate_exact_progressively_reaches_migration_cap_and_rejects_next_unit() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config_with_cap(0, i64::MAX, 2 * MIGRATION_AMOUNT);
+    fixture.send_migrate_exact(MIGRATION_AMOUNT - 1);
+    fixture.send_migrate_exact(MIGRATION_AMOUNT + 1);
+
+    assert_eq!(fixture.config().total_migrated, 2 * MIGRATION_AMOUNT);
+    assert_eq!(
+        fixture.token_balance(&fixture.user_old_qx),
+        INITIAL_USER_OLD_BALANCE - (2 * MIGRATION_AMOUNT)
+    );
+    assert_eq!(
+        fixture.token_balance(&fixture.user_new_qx),
+        INITIAL_USER_NEW_BALANCE + (2 * MIGRATION_AMOUNT)
+    );
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
+
+    assert_tx_error(
+        fixture.send_migrate_exact_result(1, fixture.vault_new_qx, fixture.old_qx_mint, fixture.new_qx_mint),
+        custom_error(MigrationError::MigrationCapExceeded),
+    );
+
+    assert_eq!(fixture.config().total_migrated, 2 * MIGRATION_AMOUNT);
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
 }
 
 #[test]
@@ -1349,6 +1354,68 @@ fn migrate_exact_rejects_when_new_mint_account_does_not_match_config() {
 }
 
 #[test]
+fn migrate_exact_rejects_when_vault_authority_account_does_not_match_config() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_with_accounts_result(
+            MIGRATION_AMOUNT,
+            Address::new_unique(),
+            fixture.vault_new_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+        ),
+        custom_error(MigrationError::InvalidVaultAuthority),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
+fn migrate_exact_rejects_when_token_program_account_is_wrong() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_with_accounts_result(
+            MIGRATION_AMOUNT,
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+            Address::new_unique(),
+        ),
+        custom_error(MigrationError::InvalidTokenProgram),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
 fn migrate_exact_rejects_when_vault_account_does_not_match_config() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -1474,6 +1541,66 @@ fn migrate_exact_rolls_back_when_burn_cpi_fails() {
         fixture.new_qx_mint,
     );
     assert!(tx_result.is_err(), "burn CPI should fail");
+
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
+    assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), new_supply_before);
+}
+
+#[test]
+fn migrate_exact_rejects_when_user_old_account_owner_mismatches_signer() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+    fixture.set_token_account_owner_field(fixture.user_old_qx, Address::new_unique());
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_result(
+            MIGRATION_AMOUNT,
+            fixture.vault_new_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+        ),
+        custom_error(MigrationError::Unauthorized),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
+fn migrate_exact_rolls_back_when_user_old_balance_is_insufficient() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+    fixture.set_token_balance(fixture.user_old_qx, MIGRATION_AMOUNT - 1);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
+    let new_supply_before = fixture.mint_supply(&fixture.new_qx_mint);
+    let total_before = fixture.config().total_migrated;
+
+    let tx_result = fixture.send_migrate_exact_result(
+        MIGRATION_AMOUNT,
+        fixture.vault_new_qx,
+        fixture.old_qx_mint,
+        fixture.new_qx_mint,
+    );
+    assert!(tx_result.is_err(), "burn CPI should fail when source balance is insufficient");
 
     assert_eq!(fixture.config().total_migrated, total_before);
     assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
