@@ -12,6 +12,7 @@
   "reserveVault": "REPLACE_RESERVE_VAULT",
   "opsAdmin": "REPLACE_OPS_ADMIN",
   "initializerAuthority": "REPLACE_INITIALIZER_AUTHORITY",
+  "fundingAuthority": "REPLACE_FUNDING_AUTHORITY",
   "expectedUpgradeAuthority": "REPLACE_EXPECTED_UPGRADE_AUTHORITY_OR_NULL",
   "migrationCapRaw": "REPLACE_MIGRATION_CAP_RAW",
   "eligibleRawUnits": "REPLACE_ELIGIBLE_RAW_UNITS",
@@ -20,7 +21,7 @@
   "endTs": "REPLACE_END_TS",
   "expectedPaused": false,
   "expectedTotalMigratedRaw": "0",
-  "expectedRefundRecipient": "REPLACE_EXPECTED_REFUND_RECIPIENT",
+  "expectedRefundRecipient": "REPLACE_FUNDING_AUTHORITY",
   "expectedUnclaimedWithdrawn": false,
   "fundingSignature": null,
   "verifiedBuild": {

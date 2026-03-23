@@ -305,6 +305,7 @@ test("buildMainnetChecks flags native new mint and accepts relative build path m
   const reserveVault = key(53);
   const opsAdmin = key(54);
   const initializerAuthority = key(55);
+  const fundingAuthority = key(56);
   const reviewedBuildInfo = {
     generatedAt: "2026-03-23T00:00:00Z",
     gitCommit: "0123456789abcdef0123456789abcdef01234567",
@@ -333,6 +334,7 @@ test("buildMainnetChecks flags native new mint and accepts relative build path m
       reserveVault: reserveVault.toBase58(),
       opsAdmin: opsAdmin.toBase58(),
       initializerAuthority: initializerAuthority.toBase58(),
+      fundingAuthority: fundingAuthority.toBase58(),
       expectedUpgradeAuthority: null,
       migrationCapRaw: "1000",
       eligibleRawUnits: "1000",
@@ -341,7 +343,7 @@ test("buildMainnetChecks flags native new mint and accepts relative build path m
       endTs: "2",
       expectedPaused: false,
       expectedTotalMigratedRaw: "0",
-      expectedRefundRecipient: initializerAuthority.toBase58(),
+      expectedRefundRecipient: fundingAuthority.toBase58(),
       expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
@@ -362,7 +364,7 @@ test("buildMainnetChecks flags native new mint and accepts relative build path m
     startTs: 1n,
     endTs: 2n,
     expectedTotalMigratedRaw: 0n,
-    configPda: key(56),
+    configPda: key(57),
     vaultAuthorityPda,
     programDataPda,
     configBump: 200,
@@ -416,6 +418,7 @@ test("buildMainnetChecks flags native new mint and accepts relative build path m
     reserveVault,
     opsAdmin,
     initializerAuthority,
+    fundingAuthority,
   });
 
   assert.equal(checks.reviewedBuildInfoProgramSoPathMatchesManifest, true);

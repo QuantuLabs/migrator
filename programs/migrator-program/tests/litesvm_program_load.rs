@@ -223,9 +223,12 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
     };
 
     let ops_admin = Keypair::new();
+    let funding_authority = Keypair::new();
     set_placeholder_system_account(&mut svm, ops_admin.pubkey());
+    set_placeholder_system_account(&mut svm, funding_authority.pubkey());
 
     let config = Address::new_unique();
+    let funding_new_token_account = Address::new_unique();
     let vault_authority = Address::new_unique();
     let vault_new_qx = Address::new_unique();
     let old_qx_mint = Address::new_unique();
@@ -236,6 +239,7 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
 
     for address in [
         config,
+        funding_new_token_account,
         vault_authority,
         vault_new_qx,
         old_qx_mint,
@@ -252,6 +256,8 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
         accounts: vec![
             AccountMeta::new_readonly(payer.pubkey(), true),
             AccountMeta::new_readonly(ops_admin.pubkey(), true),
+            AccountMeta::new_readonly(funding_authority.pubkey(), true),
+            AccountMeta::new(funding_new_token_account, false),
             AccountMeta::new(config, false),
             AccountMeta::new_readonly(vault_authority, false),
             AccountMeta::new(vault_new_qx, false),
@@ -264,7 +270,7 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
         data: vec![0u8, 1, 2, 3],
     };
 
-    let err = send_ix_result(&mut svm, &payer, &[&ops_admin], ix);
+    let err = send_ix_result(&mut svm, &payer, &[&ops_admin, &funding_authority], ix);
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
@@ -278,9 +284,12 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
     };
 
     let ops_admin = Keypair::new();
+    let funding_authority = Keypair::new();
     set_placeholder_system_account(&mut svm, ops_admin.pubkey());
+    set_placeholder_system_account(&mut svm, funding_authority.pubkey());
 
     let config = Address::new_unique();
+    let funding_new_token_account = Address::new_unique();
     let vault_authority = Address::new_unique();
     let vault_new_qx = Address::new_unique();
     let old_qx_mint = Address::new_unique();
@@ -291,6 +300,7 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
 
     for address in [
         config,
+        funding_new_token_account,
         vault_authority,
         vault_new_qx,
         old_qx_mint,
@@ -313,6 +323,8 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
         accounts: vec![
             AccountMeta::new_readonly(payer.pubkey(), true),
             AccountMeta::new_readonly(ops_admin.pubkey(), true),
+            AccountMeta::new_readonly(funding_authority.pubkey(), true),
+            AccountMeta::new(funding_new_token_account, false),
             AccountMeta::new(config, false),
             AccountMeta::new_readonly(vault_authority, false),
             AccountMeta::new(vault_new_qx, false),
@@ -325,7 +337,7 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
         data,
     };
 
-    let err = send_ix_result(&mut svm, &payer, &[&ops_admin], ix);
+    let err = send_ix_result(&mut svm, &payer, &[&ops_admin, &funding_authority], ix);
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)

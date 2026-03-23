@@ -89,6 +89,8 @@ export function buildInitializeConfigIx(params: {
   programId: PublicKey;
   initializer: PublicKey;
   opsAdmin: PublicKey;
+  fundingAuthority: PublicKey;
+  fundingNewTokenAccount: PublicKey;
   config: PublicKey;
   vaultAuthority: PublicKey;
   vaultNewQx: PublicKey;
@@ -104,9 +106,11 @@ export function buildInitializeConfigIx(params: {
     keys: [
       { pubkey: params.initializer, isSigner: true, isWritable: true },
       { pubkey: params.opsAdmin, isSigner: true, isWritable: false },
+      { pubkey: params.fundingAuthority, isSigner: true, isWritable: false },
+      { pubkey: params.fundingNewTokenAccount, isSigner: false, isWritable: true },
       { pubkey: params.config, isSigner: false, isWritable: true },
       { pubkey: params.vaultAuthority, isSigner: false, isWritable: false },
-      { pubkey: params.vaultNewQx, isSigner: false, isWritable: false },
+      { pubkey: params.vaultNewQx, isSigner: false, isWritable: true },
       { pubkey: params.oldQxMint, isSigner: false, isWritable: false },
       { pubkey: params.newQxMint, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },

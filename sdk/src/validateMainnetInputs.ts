@@ -55,6 +55,7 @@ export type MainnetInputs = {
   reserveVault: string;
   opsAdmin: string;
   initializerAuthority: string;
+  fundingAuthority: string;
   expectedUpgradeAuthority: string | null;
   migrationCapRaw: string;
   eligibleRawUnits: string;
@@ -142,6 +143,7 @@ export function parseInputs(raw: unknown): MainnetInputs {
     reserveVault: asString(record.reserveVault, "reserveVault"),
     opsAdmin: asString(record.opsAdmin, "opsAdmin"),
     initializerAuthority: asString(record.initializerAuthority, "initializerAuthority"),
+    fundingAuthority: asString(record.fundingAuthority, "fundingAuthority"),
     expectedUpgradeAuthority: asOptionalString(
       record.expectedUpgradeAuthority,
       "expectedUpgradeAuthority",
@@ -238,6 +240,7 @@ type MainnetChecksContext = {
   reserveVault: PublicKey;
   opsAdmin: PublicKey;
   initializerAuthority: PublicKey;
+  fundingAuthority: PublicKey;
 };
 
 export function buildMainnetChecks(ctx: MainnetChecksContext) {
@@ -250,6 +253,8 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
       ctx.expectedUpgradeAuthority === null
         ? ctx.inputs.expectConfigInitialized
         : ctx.initializerAuthority.toBase58() === ctx.expectedUpgradeAuthority,
+    expectedRefundRecipientMatchesFundingAuthority:
+      ctx.inputs.expectedRefundRecipient === ctx.fundingAuthority.toBase58(),
     verifiedBuildLibraryNameMatches: ctx.inputs.verifiedBuild.libraryName === "migrator_program",
     verifiedBuildMountPathPresent: ctx.inputs.verifiedBuild.mountPath.length > 0,
     verifiedBuildProgramSoPathPresent: ctx.inputs.verifiedBuild.programSoPath.length > 0,
@@ -441,6 +446,7 @@ export async function validateMainnetInputsReport(params: {
   const reserveVault = new PublicKey(inputs.reserveVault);
   const opsAdmin = new PublicKey(inputs.opsAdmin);
   const initializerAuthority = new PublicKey(inputs.initializerAuthority);
+  const fundingAuthority = new PublicKey(inputs.fundingAuthority);
   const expectedUpgradeAuthority = inputs.expectedUpgradeAuthority
     ? new PublicKey(inputs.expectedUpgradeAuthority).toBase58()
     : null;
@@ -594,6 +600,7 @@ export async function validateMainnetInputsReport(params: {
     reserveVault,
     opsAdmin,
     initializerAuthority,
+    fundingAuthority,
   });
   const ok = Object.values(checks).every((value) => value !== false);
 
@@ -613,6 +620,7 @@ export async function validateMainnetInputsReport(params: {
       reserveVault: reserveVault.toBase58(),
       opsAdmin: opsAdmin.toBase58(),
       initializerAuthority: initializerAuthority.toBase58(),
+      fundingAuthority: fundingAuthority.toBase58(),
       expectedUpgradeAuthority,
       migrationCapRaw: migrationCapRaw.toString(),
       eligibleRawUnits: eligibleRawUnits.toString(),

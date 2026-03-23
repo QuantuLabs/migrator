@@ -69,6 +69,7 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
       reserveVault: "vault",
       opsAdmin: "admin",
       initializerAuthority: "init",
+      fundingAuthority: "fund",
       expectedUpgradeAuthority: "upgrade",
       migrationCapRaw: "100",
       eligibleRawUnits: "100",
@@ -77,7 +78,7 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
       endTs: "2",
       expectedPaused: false,
       expectedTotalMigratedRaw: "0",
-      expectedRefundRecipient: "init",
+      expectedRefundRecipient: "fund",
       expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {

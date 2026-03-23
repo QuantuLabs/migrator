@@ -36,11 +36,11 @@ const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
 const VAULT_NEW_QX_BYTES: [u8; 32] = [43u8; 32];
 const USER_OLD_QX_BYTES: [u8; 32] = [44u8; 32];
 
-const INITIAL_RESERVE: u64 = 1_000;
 const INITIAL_USER_OLD_BALANCE: u64 = 250;
 const INITIAL_USER_NEW_BALANCE: u64 = 0;
 const MIGRATION_AMOUNT: u64 = 100;
 const MIGRATION_CAP: u64 = INITIAL_USER_OLD_BALANCE;
+const INITIAL_RESERVE: u64 = MIGRATION_CAP;
 
 fn resolve_sbf_out_dir() -> Option<PathBuf> {
     if let Ok(path) = env::var("MIGRATOR_PROGRAM_SBF_PATH") {
@@ -218,12 +218,14 @@ struct FixtureAccounts {
     accounts: Vec<(Pubkey, Account)>,
     initializer: Pubkey,
     ops_admin: Pubkey,
+    funding_authority: Pubkey,
     user: Pubkey,
     config_pda: Pubkey,
     vault_authority_pda: Pubkey,
     program_data: Pubkey,
     old_qx_mint: Pubkey,
     new_qx_mint: Pubkey,
+    funding_new_qx: Pubkey,
     vault_new_qx: Pubkey,
     refund_recipient_new_qx: Pubkey,
     user_old_qx: Pubkey,
@@ -255,6 +257,8 @@ impl FixtureAccounts {
             vec![
                 AccountMeta::new(self.initializer, true),
                 AccountMeta::new_readonly(self.ops_admin, true),
+                AccountMeta::new_readonly(self.funding_authority, true),
+                AccountMeta::new(self.funding_new_qx, false),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(self.vault_authority_pda, false),
                 AccountMeta::new(self.vault_new_qx, false),
@@ -318,6 +322,7 @@ impl FixtureAccounts {
 fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
     let initializer = Pubkey::new_unique();
     let ops_admin = Pubkey::new_unique();
+    let funding_authority = Pubkey::new_unique();
     let user = Pubkey::new_unique();
     let loader_program = Pubkey::new_from_array(UPGRADEABLE_LOADER_PROGRAM_ID);
     let token_program = Pubkey::new_from_array(TOKEN_PROGRAM_ID);
@@ -329,8 +334,9 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
 
     let old_qx_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
     let new_qx_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
+    let funding_new_qx = Pubkey::new_unique();
     let vault_new_qx = Pubkey::new_from_array(VAULT_NEW_QX_BYTES);
-    let refund_recipient_new_qx = associated_token_address(&initializer, &new_qx_mint);
+    let refund_recipient_new_qx = associated_token_address(&funding_authority, &new_qx_mint);
     let user_old_qx = Pubkey::new_from_array(USER_OLD_QX_BYTES);
     let user_new_qx = associated_token_address(&user, &new_qx_mint);
     let (system_program, system_program_account) = keyed_account_for_system_program();
@@ -344,6 +350,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
     let accounts = vec![
         (initializer, Account::new(2_000_000_000, 0, &system_program)),
         (ops_admin, Account::new(1_000_000_000, 0, &system_program)),
+        (funding_authority, Account::new(1_000_000_000, 0, &system_program)),
         (user, Account::new(1_000_000_000, 0, &system_program)),
         (config_pda, Account::default()),
         (vault_authority_pda, Account::new(1_000_000, 0, &program_id)),
@@ -381,7 +388,17 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
             vault_new_qx,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &vault_authority_pda, INITIAL_RESERVE),
+                data: make_token_account_data(&new_qx_mint, &vault_authority_pda, 0),
+                owner: token_program,
+                executable: false,
+                rent_epoch: 0,
+            },
+        ),
+        (
+            funding_new_qx,
+            Account {
+                lamports: 1_000_000,
+                data: make_token_account_data(&new_qx_mint, &funding_authority, INITIAL_RESERVE),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
@@ -391,7 +408,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
             refund_recipient_new_qx,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &initializer, 0),
+                data: make_token_account_data(&new_qx_mint, &funding_authority, 0),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
@@ -432,12 +449,14 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
         accounts,
         initializer,
         ops_admin,
+        funding_authority,
         user,
         config_pda,
         vault_authority_pda,
         program_data,
         old_qx_mint,
         new_qx_mint,
+        funding_new_qx,
         vault_new_qx,
         refund_recipient_new_qx,
         user_old_qx,
@@ -449,6 +468,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
 fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
     let initializer = Pubkey::new_unique();
     let ops_admin = Pubkey::new_unique();
+    let funding_authority = Pubkey::new_unique();
     let user = Pubkey::new_unique();
     let loader_program = Pubkey::new_from_array(UPGRADEABLE_LOADER_PROGRAM_ID);
     let token_program = Pubkey::new_from_array(TOKEN_PROGRAM_ID);
@@ -461,8 +481,9 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
 
     let old_qx_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
     let new_qx_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
+    let funding_new_qx = Pubkey::new_unique();
     let vault_new_qx = Pubkey::new_from_array(VAULT_NEW_QX_BYTES);
-    let refund_recipient_new_qx = associated_token_address(&initializer, &new_qx_mint);
+    let refund_recipient_new_qx = associated_token_address(&funding_authority, &new_qx_mint);
     let user_old_qx = Pubkey::new_from_array(USER_OLD_QX_BYTES);
     let user_new_qx = associated_token_address(&user, &new_qx_mint);
     let (system_program, system_program_account) = keyed_account_for_system_program();
@@ -476,6 +497,7 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
     let accounts = vec![
         (initializer, Account::new(2_000_000_000, 0, &system_program)),
         (ops_admin, Account::new(1_000_000_000, 0, &system_program)),
+        (funding_authority, Account::new(1_000_000_000, 0, &system_program)),
         (user, Account::new(1_000_000_000, 0, &system_program)),
         (config_pda, Account::default()),
         (vault_authority_pda, Account::new(1_000_000, 0, &program_id)),
@@ -513,6 +535,14 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
                 &token_program,
             ),
         ),
+        (
+            funding_new_qx,
+            Account::new(
+                Rent::default().minimum_balance(TokenAccount::LEN),
+                TokenAccount::LEN,
+                &token_program,
+            ),
+        ),
         (refund_recipient_new_qx, Account::default()),
         (
             user_old_qx,
@@ -539,12 +569,14 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
         accounts,
         initializer,
         ops_admin,
+        funding_authority,
         user,
         config_pda,
         vault_authority_pda,
         program_data,
         old_qx_mint,
         new_qx_mint,
+        funding_new_qx,
         vault_new_qx,
         refund_recipient_new_qx,
         user_old_qx,
@@ -570,8 +602,8 @@ fn mollusk_initialize_config_binds_expected_state_and_cap() {
 
     assert_eq!(
         result.inner_instructions.len(),
-        2,
-        "initialize_config should issue the expected system-program CPIs"
+        3,
+        "initialize_config should issue the expected create-and-fund CPIs"
     );
 
     let config_account = account_by_key(&result.resulting_accounts, &fixture.config_pda);
@@ -591,9 +623,11 @@ fn mollusk_initialize_config_binds_expected_state_and_cap() {
     assert_eq!(config.vault_new_qx, *fixture.vault_new_qx.as_array());
     assert_eq!(config.total_migrated, 0);
     assert_eq!(config.migration_cap(), MIGRATION_CAP);
-    assert_eq!(config.refund_recipient(), *fixture.initializer.as_array());
+    assert_eq!(config.refund_recipient(), *fixture.funding_authority.as_array());
     assert_eq!(config.start_ts, 0);
     assert_eq!(config.end_ts, i64::MAX);
+    assert_eq!(token_amount(account_by_key(&result.resulting_accounts, &fixture.funding_new_qx)), 0);
+    assert_eq!(token_amount(account_by_key(&result.resulting_accounts, &fixture.vault_new_qx)), MIGRATION_CAP);
 }
 
 #[test]
@@ -799,6 +833,18 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &initialize_account3(
             &token_program,
+            &fixture.funding_new_qx,
+            &fixture.new_qx_mint,
+            &fixture.funding_authority,
+        )
+        .expect("initialize funding account instruction"),
+        &accounts,
+        &[Check::success()],
+    );
+    accounts = process_instruction(
+        &mollusk,
+        &initialize_account3(
+            &token_program,
             &fixture.vault_new_qx,
             &fixture.new_qx_mint,
             &fixture.vault_authority_pda,
@@ -849,7 +895,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mint_to(
             &token_program,
             &fixture.new_qx_mint,
-            &fixture.vault_new_qx,
+            &fixture.funding_new_qx,
             &fixture.initializer,
             &[],
             INITIAL_RESERVE,
@@ -922,7 +968,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         INITIAL_USER_OLD_BALANCE - MIGRATION_AMOUNT
     );
     assert_eq!(new_balance_after, MIGRATION_AMOUNT);
-    assert_eq!(reserve_balance_after, INITIAL_RESERVE - MIGRATION_AMOUNT);
+    assert_eq!(reserve_balance_after, MIGRATION_CAP - MIGRATION_AMOUNT);
 }
 
 #[test]

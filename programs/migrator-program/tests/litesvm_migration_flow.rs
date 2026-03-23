@@ -25,11 +25,11 @@ const NATIVE_MINT_BYTES: [u8; 32] = [
     235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
 ];
 
-const INITIAL_RESERVE: u64 = 1_000;
 const INITIAL_USER_OLD_BALANCE: u64 = 250;
 const INITIAL_USER_NEW_BALANCE: u64 = 0;
 const MIGRATION_AMOUNT: u64 = 100;
 const MIGRATION_CAP: u64 = INITIAL_USER_OLD_BALANCE;
+const INITIAL_RESERVE: u64 = MIGRATION_CAP;
 
 fn resolve_program_path() -> Option<PathBuf> {
     if let Ok(path) = env::var("MIGRATOR_PROGRAM_SBF_PATH") {
@@ -134,12 +134,14 @@ struct MigrationFlowFixture {
     program_id: Address,
     initializer: Keypair,
     ops_admin: Keypair,
+    funding_authority: Keypair,
     user: Keypair,
     config_pda: Address,
     vault_authority_pda: Address,
     program_data: Address,
     old_qx_mint: Address,
     new_qx_mint: Address,
+    funding_new_qx: Address,
     vault_new_qx: Address,
     user_old_qx: Address,
     user_new_qx: Address,
@@ -168,11 +170,14 @@ impl MigrationFlowFixture {
 
         let initializer = Keypair::new();
         let ops_admin = Keypair::new();
+        let funding_authority = Keypair::new();
         let user = Keypair::new();
         svm.airdrop(&initializer.pubkey(), 2_000_000_000)
             .expect("airdrop for initializer should succeed");
         svm.airdrop(&ops_admin.pubkey(), 1_000_000_000)
             .expect("airdrop for ops_admin should succeed");
+        svm.airdrop(&funding_authority.pubkey(), 1_000_000_000)
+            .expect("airdrop for funding_authority should succeed");
         svm.airdrop(&user.pubkey(), 1_000_000_000)
             .expect("airdrop for user should succeed");
 
@@ -186,10 +191,12 @@ impl MigrationFlowFixture {
 
         let old_qx_mint = Address::new_from_array(OLD_MINT_BYTES);
         let new_qx_mint = Address::new_from_array(NEW_MINT_BYTES);
+        let funding_new_qx = Address::new_unique();
         let vault_new_qx = Address::new_from_array(VAULT_NEW_QX_BYTES);
         let user_old_qx = Address::new_from_array(USER_OLD_QX_BYTES);
         let user_new_qx = associated_token_address(&user.pubkey(), &new_qx_mint);
-        let refund_recipient_new_qx = associated_token_address(&initializer.pubkey(), &new_qx_mint);
+        let refund_recipient_new_qx =
+            associated_token_address(&funding_authority.pubkey(), &new_qx_mint);
 
         svm.set_account(config_pda, Account::default())
             .expect("config PDA placeholder should be set as an uninitialized system account");
@@ -246,13 +253,29 @@ impl MigrationFlowFixture {
             vault_new_qx,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &vault_authority_pda, INITIAL_RESERVE),
+                data: make_token_account_data(&new_qx_mint, &vault_authority_pda, 0),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
             },
         )
         .expect("reserve vault token account should be set");
+
+        svm.set_account(
+            funding_new_qx,
+            Account {
+                lamports: 1_000_000,
+                data: make_token_account_data(
+                    &new_qx_mint,
+                    &funding_authority.pubkey(),
+                    INITIAL_RESERVE,
+                ),
+                owner: token_program,
+                executable: false,
+                rent_epoch: 0,
+            },
+        )
+        .expect("funding token account should be set");
 
         svm.set_account(
             user_old_qx,
@@ -292,7 +315,7 @@ impl MigrationFlowFixture {
                 lamports: 1_000_000,
                 data: make_token_account_data(
                     &new_qx_mint,
-                    &initializer.pubkey(),
+                    &funding_authority.pubkey(),
                     INITIAL_USER_NEW_BALANCE,
                 ),
                 owner: token_program,
@@ -307,12 +330,14 @@ impl MigrationFlowFixture {
             program_id,
             initializer,
             ops_admin,
+            funding_authority,
             user,
             config_pda,
             vault_authority_pda,
             program_data,
             old_qx_mint,
             new_qx_mint,
+            funding_new_qx,
             vault_new_qx,
             user_old_qx,
             user_new_qx,
@@ -327,6 +352,7 @@ impl MigrationFlowFixture {
         start_ts: i64,
         end_ts: i64,
         migration_cap: u64,
+        funding_new_qx: Address,
         vault_authority: Address,
         vault_new_qx: Address,
         old_qx_mint: Address,
@@ -344,6 +370,8 @@ impl MigrationFlowFixture {
             accounts: vec![
                 AccountMeta::new(self.initializer.pubkey(), true),
                 AccountMeta::new_readonly(self.ops_admin.pubkey(), true),
+                AccountMeta::new_readonly(self.funding_authority.pubkey(), true),
+                AccountMeta::new(funding_new_qx, false),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(vault_authority, false),
                 AccountMeta::new(vault_new_qx, false),
@@ -360,7 +388,7 @@ impl MigrationFlowFixture {
         let msg = Message::new_with_blockhash(&[ix], Some(&self.initializer.pubkey()), &blockhash);
         let tx = VersionedTransaction::try_new(
             VersionedMessage::Legacy(msg),
-            &[&self.initializer, &self.ops_admin],
+            &[&self.initializer, &self.ops_admin, &self.funding_authority],
         )
         .expect("signed tx should be created");
 
@@ -373,6 +401,7 @@ impl MigrationFlowFixture {
         &mut self,
         start_ts: i64,
         end_ts: i64,
+        funding_new_qx: Address,
         vault_authority: Address,
         vault_new_qx: Address,
         old_qx_mint: Address,
@@ -384,6 +413,7 @@ impl MigrationFlowFixture {
             start_ts,
             end_ts,
             MIGRATION_CAP,
+            funding_new_qx,
             vault_authority,
             vault_new_qx,
             old_qx_mint,
@@ -404,6 +434,7 @@ impl MigrationFlowFixture {
             start_ts,
             end_ts,
             migration_cap,
+            self.funding_new_qx,
             self.vault_authority_pda,
             self.vault_new_qx,
             self.old_qx_mint,
@@ -846,10 +877,15 @@ fn initialize_config_persists_expected_state() {
     assert_eq!(config.migration_cap(), MIGRATION_CAP);
     assert_eq!(
         config.refund_recipient(),
-        *fixture.initializer.pubkey().as_array()
+        *fixture.funding_authority.pubkey().as_array()
     );
     assert_eq!(config.start_ts, 0);
     assert_eq!(config.end_ts, i64::MAX);
+    assert_eq!(
+        fixture.token_balance(&fixture.funding_new_qx),
+        INITIAL_RESERVE - MIGRATION_CAP
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), MIGRATION_CAP);
 }
 
 #[test]
@@ -1017,7 +1053,7 @@ fn initialize_config_rejects_reinitialization_without_mutating_config() {
 
     assert_tx_error(
         fixture.send_initialize_config_result(1, i64::MAX),
-        TransactionError::InstructionError(0, InstructionError::IllegalOwner),
+        custom_error(MigrationError::InvalidConfig),
     );
 
     assert_eq!(fixture.config(), config_before);
@@ -1033,6 +1069,7 @@ fn initialize_config_rejects_same_old_and_new_mint() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
+            fixture.funding_new_qx,
             fixture.vault_authority_pda,
             fixture.vault_new_qx,
             fixture.old_qx_mint,
@@ -1069,6 +1106,7 @@ fn initialize_config_rejects_native_old_mint() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
+            fixture.funding_new_qx,
             fixture.vault_authority_pda,
             fixture.vault_new_qx,
             native_mint,
@@ -1107,6 +1145,7 @@ fn initialize_config_rejects_native_new_mint() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
+            fixture.funding_new_qx,
             fixture.vault_authority_pda,
             fixture.vault_new_qx,
             fixture.old_qx_mint,
@@ -1130,6 +1169,7 @@ fn initialize_config_rejects_invalid_token_program_account() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
+            fixture.funding_new_qx,
             fixture.vault_authority_pda,
             fixture.vault_new_qx,
             fixture.old_qx_mint,
@@ -1151,6 +1191,7 @@ fn initialize_config_rejects_when_config_pda_is_reused_as_reserve_vault_account(
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
+            fixture.funding_new_qx,
             fixture.vault_authority_pda,
             fixture.config_pda,
             fixture.old_qx_mint,
@@ -1207,6 +1248,54 @@ fn initialize_config_rejects_reserve_vault_owned_by_wrong_program() {
 }
 
 #[test]
+fn initialize_config_rejects_prefunded_vault() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_token_balance(fixture.vault_new_qx, 1);
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidConfig),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
+fn initialize_config_rejects_funding_source_owned_by_wrong_wallet() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_token_account_owner_field(fixture.funding_new_qx, fixture.user.pubkey());
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::Unauthorized),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
+fn initialize_config_rejects_funding_source_with_delegate_controls() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_token_account_controls(fixture.funding_new_qx, 1, 1, 0, 0);
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidTokenAccountControls),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
 fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -1224,7 +1313,7 @@ fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
     );
     assert_eq!(
         fixture.token_balance(&fixture.vault_new_qx),
-        INITIAL_RESERVE
+        MIGRATION_CAP
     );
     assert_eq!(
         fixture.mint_supply(&fixture.old_qx_mint),
@@ -1246,7 +1335,7 @@ fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
     );
     assert_eq!(
         fixture.token_balance(&fixture.vault_new_qx),
-        INITIAL_RESERVE - MIGRATION_AMOUNT
+        MIGRATION_CAP - MIGRATION_AMOUNT
     );
     assert_eq!(
         fixture.mint_supply(&fixture.old_qx_mint),
@@ -2292,7 +2381,7 @@ fn withdraw_unclaimed_rejects_wrong_refund_destination_ata() {
                 lamports: 1_000_000,
                 data: make_token_account_data(
                     &fixture.new_qx_mint,
-                    &fixture.initializer.pubkey(),
+                    &fixture.funding_authority.pubkey(),
                     INITIAL_USER_NEW_BALANCE,
                 ),
                 owner: Address::new_from_array(TOKEN_PROGRAM_ID),
