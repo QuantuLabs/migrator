@@ -5,6 +5,7 @@ import type { AccountInfo } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
 
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
   MIGRATION_CONFIG_DISCRIMINATOR,
   MIGRATION_CONFIG_SIZE,
@@ -412,8 +413,31 @@ test("findAssociatedTokenAddress derives the canonical ATA", () => {
   const owner = key(61);
   const mint = key(62);
   const ata = findAssociatedTokenAddress(owner, mint);
+  const officialAtaProgram = new PublicKey(
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+  );
+  const officialTokenProgram = new PublicKey(
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  );
+  const expectedAta = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), officialTokenProgram.toBuffer(), mint.toBuffer()],
+    officialAtaProgram,
+  )[0];
 
   assert.equal(ata instanceof PublicKey, true);
+  assert.equal(
+    ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),
+    officialAtaProgram.toBase58(),
+  );
+  assert.equal(TOKEN_PROGRAM_ID.toBase58(), officialTokenProgram.toBase58());
   assert.notEqual(ata.toBase58(), owner.toBase58());
   assert.notEqual(ata.toBase58(), mint.toBase58());
+  assert.equal(ata.toBase58(), expectedAta.toBase58());
+});
+
+test("ASSOCIATED_TOKEN_PROGRAM_ID matches the official Solana ATA program id", () => {
+  assert.equal(
+    ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+  );
 });

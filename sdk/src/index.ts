@@ -2,7 +2,7 @@ import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.j
 
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
-  "ATokenGPvbdGVxr1b2hvZbsiW5xWH25efTNsLJA8knL",
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
 );
 export const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
   "BPFLoaderUpgradeab1e11111111111111111111111",
