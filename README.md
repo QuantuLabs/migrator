@@ -82,12 +82,15 @@ Out of scope for V1:
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
 - `LiteSVM` migration-flow suite currently covers `51` end-to-end cases
 - `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
-- `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
+- `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, fixture roundtrip replay, and a real `SPL + ATA` bootstrap into `migrate_exact`
+- direct `cargo test --test mollusk_fuzz_lane` is not a release-authoritative substitute because it can reuse an already-built `target/deploy` artifact instead of rebuilding the SBF binary first
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
 - `./scripts/run-verified-build.sh` is the canonical deterministic-build lane
 - `.github/workflows/verified-build.yml` runs the deterministic-build lane on `push`, `pull_request`, and `workflow_dispatch`
 - `./scripts/run-mainnet-dry-run.sh <filled-inputs.json>` is the canonical release-input validator
 - `sdk/` release-report tests cover `validateMainnetInputs`, `verifyProgramAuthority`, `verifyConfig`, `verifyReserveVault`, `verifyMint`, and `generateReserveProof` builders
+- `sdk/` regression tests pin the official associated-token and `Tokenkeg` program IDs and verify ATA derivation against those literals
+- the real `SPL + ATA` lane caught and closed an incorrect associated-token-program constant regression before release
 
 Current toolchain note:
 

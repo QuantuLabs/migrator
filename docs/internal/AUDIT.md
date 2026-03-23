@@ -82,8 +82,10 @@ Current verification coverage:
 - `Mollusk` successful `initialize_config` with inner-instruction tracking
 - `Mollusk` rejected `initialize_config` when `migration_cap > reserve`
 - `Mollusk` paused `migrate_exact` rejection before any token CPI
+- `Mollusk` real `SPL + ATA` bootstrap that initializes both mints, reserve vault, user source account, creates the canonical destination ATA through the associated-token program, then executes successful `migrate_exact`
 - `Mollusk` fixture roundtrip replay for successful and failing `initialize_config`
 - `Mollusk` canonical lane requires a built SBF artifact and cannot silently skip in script mode
+- the real `SPL + ATA` lane exposed and closed an incorrect associated-token-program constant regression before release
 - negative transaction tests assert the exact `TransactionError` / custom error code, not just `.is_err()`
 - transaction-level malformed entrypoint payload tests cover empty data, bad discriminator, short migrate payload, short initialize payload, and invalid set-pause payload
 - SDK release-report tests cover program authority, reserve vault, config, manifest parsing, and mainnet-input parsing helpers
@@ -104,7 +106,7 @@ What is still missing before mainnet confidence:
 - finalized publication flow using the config/program-authority verification scripts
 - verified-build publication and public source linkage
 - second-provider replay of the reviewed mainnet dry-run manifest before release sign-off
-- a transaction lane that creates the relevant mint/token/ATA accounts through real SPL + ATA instructions instead of only synthetic fixture layouts
+- a broader transaction lane that also creates the surrounding system-owned and upgradeable-loader state through real instructions instead of keeping `ProgramData`, PDAs, and some placeholders synthetic inside the harness
 - broader stateful fuzzing beyond the current `Mollusk` lane if the program surface grows
 - upstream `Kani` batch-run stability should be rechecked before restoring the single-command release gate
 
@@ -336,6 +338,10 @@ Why this split is acceptable:
 Observed `Kani` caveat:
 
 - current proofs emit unsupported-construct warnings from crate-level Solana/Pinocchio paths, but the verified harnesses stay within the pure control helper and completed successfully
+
+Observed `Mollusk` caveat:
+
+- release confidence should come from `./scripts/run-mollusk-lane.sh`, not a bare `cargo test --test mollusk_fuzz_lane`, because the script rebuilds the SBF artifact first and avoids stale `target/deploy` binaries masking or reintroducing regressions
 
 ## Pre-Launch Checklist
 

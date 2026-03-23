@@ -24,7 +24,10 @@ The lane currently covers:
 - successful `initialize_config`
 - rejected `initialize_config` when `migration_cap > reserve`
 - `set_pause(true)` followed by `migrate_exact`, proving the paused path stops before any token CPI
+- a real `SPL + ATA` bootstrap path that initializes the mints and token accounts through `spl-token`, creates the destination ATA through the associated-token program, then executes successful `migrate_exact`
 - fixture roundtrip replay for both successful and failing `initialize_config`
+
+That real bootstrap path already paid for itself once: it exposed an incorrect associated-token-program constant that the purely synthetic fixtures had not surfaced.
 
 This is intentionally complementary to `LiteSVM`:
 
@@ -47,6 +50,8 @@ This will:
 4. run the `mollusk_fuzz_lane` test suite
 
 This script is the canonical way to run the lane. A plain `cargo test` may still compile the suite without executing the SBF-backed cases if no program artifact is available locally.
+
+The lane depends on the built SBF artifact, not only the host test binary. If a low-level constant changes in the on-chain program, rerun this script or `./scripts/run-sbf-assurance-lane.sh` before trusting `Mollusk` results.
 
 ## Fixture Ejection
 
@@ -72,5 +77,11 @@ This lane does not replace:
 - `Kani` proofs over pure helpers and layout invariants
 - verified-build publication
 - devnet/mainnet dry runs
+
+This lane also still keeps some scaffolding synthetic inside the harness:
+
+- the upgradeable-loader `ProgramData` account is still fixture-backed
+- PDA placeholders are still provisioned directly in the harness
+- the full system-program account-creation path is not replayed end-to-end
 
 It is one more security layer, not the only one.
