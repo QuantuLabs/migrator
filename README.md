@@ -35,10 +35,12 @@ In scope for V1:
 - `1:1` migration from `old QX` to `new QX`
 - `Tokenkeg` only (`spl-token` classic, not `Token-2022`)
 - pre-funded reserve vault for `new QX`
-- immutable on-chain migration cap tied to approved eligible supply
+- immutable on-chain migration cap tied to the approved migration total
 - atomic burn + transfer
 - pause switch
 - public config/state readable off-chain
+- canonical ATA-only destination for `new QX`
+- open live-holder migration path unless excluded balances are operationally locked before launch
 
 Out of scope for V1:
 
@@ -74,13 +76,14 @@ Out of scope for V1:
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
-- `LiteSVM` migration-flow suite currently covers `36` end-to-end cases
+- `LiteSVM` migration-flow suite currently covers `41` end-to-end cases
 - `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
 - `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
 - `./scripts/run-verified-build.sh` is the canonical deterministic-build lane
 - `.github/workflows/verified-build.yml` runs the deterministic-build lane on `push`, `pull_request`, and `workflow_dispatch`
 - `./scripts/run-mainnet-dry-run.sh <filled-inputs.json>` is the canonical release-input validator
+- `sdk/` release-report tests cover `validateMainnetInputs`, `verifyProgramAuthority`, `verifyConfig`, `verifyReserveVault`, `verifyMint`, and `generateReserveProof` builders
 
 Current toolchain note:
 
@@ -91,7 +94,7 @@ Verified-build lane policy:
 
 - the root `Cargo.toml` exposes the verifier toolchain via `[workspace.metadata.cli]`
 - `./scripts/run-verified-build.sh` requires a fully clean git worktree by default
-- the script uses an absolute mount path to avoid the `solana-verify 0.4.11` `.` mount-path bug for workspace subcrates
+- the script records repo-relative `programSoPath` metadata so reviewed build artifacts stay reproducible across reviewer machines
 
 ## Mint Policy
 
@@ -120,3 +123,13 @@ That means:
 - the destination must be the expected ATA address
 - the destination cannot carry delegate, close-authority, or wrapped-native controls
 - frontend and ops flows must create the ATA before attempting migration
+
+## Eligibility Policy
+
+V1 does **not** enforce wallet-by-wallet eligibility on-chain.
+
+That means:
+
+- `migrate_exact` is open to any current holder that can burn valid `old QX`
+- the only hard on-chain limiter is the immutable global `migration_cap`
+- if some old balances are meant to stay excluded, they must be locked, burned, or otherwise operationally prevented from reaching live wallets before launch

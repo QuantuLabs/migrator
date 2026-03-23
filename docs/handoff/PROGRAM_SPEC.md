@@ -23,8 +23,9 @@ Token policy:
 4. Reserve is held in a token account owned by a PDA controlled by the program.
 5. No per-user migration account is stored on-chain in V1.
 6. Snapshot is off-chain audit data only.
-7. No late-claim penalty in V1.
-8. No admin instruction can change the ratio or swap the mint addresses after initialization.
+7. V1 is open to any live holder of burnable `old QX`; there is no on-chain allowlist or Merkle root.
+8. No late-claim penalty in V1.
+9. No admin instruction can change the ratio or swap the mint addresses after initialization.
 
 ## Instructions
 
@@ -59,6 +60,7 @@ Required checks:
 - config PDA matches seeds
 - vault authority PDA matches seeds
 - `old QX` mint and `new QX` mint are different
+- neither mint is the native mint / wrapped-SOL mint
 - both mints belong to the same supported token program
 - both mints are initialized
 - both mints have `mintAuthority == None`
@@ -110,6 +112,8 @@ Required checks:
 - user old token account mint is `old QX`
 - user new token account owner is `user`
 - user new token account mint is `new QX`
+- user new token account address is the canonical ATA for `(user, new QX mint)`
+- user new token account has no delegate, close-authority, or wrapped-native controls
 - both user token accounts are initialized
 - reserve vault mint is `new QX`
 - reserve vault owner is vault authority PDA
@@ -200,7 +204,8 @@ Initial discriminator map:
 ## Ops Notes
 
 - `vault_new_qx` should be funded before public launch
-- `migration_cap` should equal the approved eligible old-token raw-unit total
+- `migration_cap` should equal the approved migration total for the open live-holder window
+- if any legacy balances are intentionally excluded, they must be operationally locked or removed before launch because V1 does not enforce wallet-level eligibility on-chain
 - the final Bags mint must be verified as `Tokenkeg` before mainnet initialization
 - public docs must publish:
   - program id

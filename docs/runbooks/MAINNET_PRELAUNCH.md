@@ -7,6 +7,7 @@ Do not initialize mainnet config until all of the following are true:
 - final `new QX` mint exists
 - final `old QX` mint address is frozen and reviewed
 - final `new QX` mint passes the `Tokenkeg` checklist
+- final `new QX` mint is confirmed not to be the native mint / wrapped-SOL mint
 - reserve vault is funded
 - program id is fixed
 - admin signer policy is fixed
@@ -46,6 +47,7 @@ Verify and publish these exact addresses:
 - reserve proof script passes with the approved eligible-supply input
 - dry-run validator proves the derived config PDA is absent before init
 - approved eligible-supply input exactly matches the `migration_cap` that will be initialized on-chain
+- reviewed dry-run manifest is re-run against at least one second independent mainnet RPC before sign-off
 - config PDA and vault PDA re-derive correctly from the chosen program id
 - reserve vault owner is the vault PDA
 - reserve vault mint is the final `new QX` mint
@@ -63,6 +65,7 @@ Verify and publish these exact addresses:
 - emergency pause instructions are prepared
 - reserve-proof artifact is completed and reviewed
 - planned `migration_cap` equals the reviewed eligible raw-unit total
+- the team explicitly accepts that V1 is an open live-holder migrator, or excluded balances are operationally locked before launch
 - published config state matches the runbook address set exactly
 - old-token deprecation notice is ready
 - any controlled old-token liquidity removal or disablement plan is ready
@@ -86,6 +89,7 @@ Go only if:
 - pause authority is verified
 - upgrade authority state matches the published policy
 - reserve-proof artifact includes raw units, decimals, funding signature, and reviewer sign-off
+- old-market deprecation and controlled-liquidity disablement are ready to execute at opening
 - verified-build artifact hash and reviewed dry-run manifest are attached to the release record
 
 If any of these fail, stop and keep migration closed.

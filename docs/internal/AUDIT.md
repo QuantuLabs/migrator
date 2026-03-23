@@ -97,7 +97,7 @@ What is still missing before mainnet confidence:
 - explicit upgrade-authority lock/freeze/transfer execution before public launch
 - finalized publication flow using the config/program-authority verification scripts
 - verified-build publication and public source linkage
-- fixture-driven tests for the full mainnet dry-run validator against realistic reviewed manifests
+- second-provider replay of the reviewed mainnet dry-run manifest before release sign-off
 - broader stateful fuzzing beyond the current `Mollusk` lane if the program surface grows
 - upstream `Kani` batch-run stability should be rechecked before restoring the single-command release gate
 
@@ -109,11 +109,12 @@ Risk:
 
 - `1:1` is socially dead if the approved eligible supply is wrong or if the reserve cannot cover that approved total.
 - the program now binds an immutable on-chain `migration_cap` and rejects initialization unless the reserve vault already covers it.
-- the remaining trust surface is the off-chain selection of the approved eligible supply, not an unbounded on-chain drain past that cap.
+- the remaining trust surface is the off-chain selection of the approved migration total and any excluded balances, not an unbounded on-chain drain past that cap.
 
 Mitigation:
 
 - compute eligible old supply before public commitment
+- either treat the migration as openly available to any live holder, or operationally lock excluded balances before launch
 - bind that approved raw-unit total into `migration_cap` during `initialize_config`
 - require reserve vault balance to cover `migration_cap` at initialization time
 - publish reserve vault address before launch
@@ -143,6 +144,8 @@ Mitigation:
 - derive vault authority PDA on-chain every call
 - verify reserve token account owner equals vault PDA
 - verify user destination owner equals signer
+- verify user destination equals the canonical ATA for `(user, new QX mint)`
+- reject destination accounts with delegate, close-authority, or wrapped-native controls
 - reject reserve vaults with delegate or close-authority controls
 - never accept unchecked destination authority fields in instruction data
 
@@ -221,6 +224,7 @@ Current decision:
 
 - keep V1 `Tokenkeg only`
 - do not add `Token-2022` support unless the final Bags mint forces that change
+- reject native-mint / wrapped-SOL paths on both old and new sides in V1
 
 ### H4. Old market remains active
 
