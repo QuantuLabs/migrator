@@ -70,6 +70,12 @@ Verify and publish these exact addresses:
 - old-token deprecation notice is ready
 - any controlled old-token liquidity removal or disablement plan is ready
 - official routing, bots, and docs stop pointing users to the old pool when migration opens
+- `OLD_MARKET_DEPRECATION.md` is filled and assigned to concrete owners
+- `OLD_LP_RETIREMENT.md` is filled with the exact controlled-wallet inventory and expected tx hashes
+- `OLD_MARKET_MONITORING.md` is filled with concrete thresholds and owners
+- `DEPRECATION_EVIDENCE.md` has placeholders prepared for same-day publication and sign-off
+- every team-controlled old LP is either already retired or has a same-window retirement transaction plan owned by a named operator
+- no treasury or market-making wallet is expected to leave live old-QX inventory reachable at open
 
 ## Governance Checks
 
@@ -90,6 +96,8 @@ Go only if:
 - upgrade authority state matches the published policy
 - reserve-proof artifact includes raw units, decimals, funding signature, and reviewer sign-off
 - old-market deprecation and controlled-liquidity disablement are ready to execute at opening
+- every controlled old LP is retired or has an assigned same-window retirement step with proof capture
+- `DEPRECATION_EVIDENCE.md` has named owners for liquidity, frontend, comms, and monitoring sign-off
 - verified-build artifact hash and reviewed dry-run manifest are attached to the release record
 
 If any of these fail, stop and keep migration closed.

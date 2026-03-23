@@ -233,14 +233,17 @@ Risk:
 - even a perfect migrator does not kill the old market by itself.
 - if legacy liquidity remains while circulating old supply gets burned away, the old market can become thinner and easier to manipulate
 - that can create a misleading legacy price increase and a fake market-cap signal during migration
+- if a team-controlled old LP remains live, that LP becomes an economic ingress into the V1 reserve because any freshly acquired `old QX` can still be burned `1:1`
 
 Mitigation:
 
 - deprecate the old token publicly
-- remove any controlled old liquidity if applicable
+- retire every controlled old LP before or at open
+- treat any team-controlled old LP that stays live as a go/no-go blocker
 - stop routing any official UI, bot, or docs toward the old pool once migration opens
 - communicate that legacy price action is non-canonical after launch
 - make the official site and docs point to the new mint only
+- maintain an evidence pack with tx hashes, owners, and sign-off for the deprecation sequence
 
 ## Medium Risks
 

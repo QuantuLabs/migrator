@@ -66,6 +66,10 @@ Out of scope for V1:
 - `docs/runbooks/VERIFIED_BUILD.md` — deterministic build and hash publication flow
 - `docs/runbooks/UPGRADE_AUTHORITY_POLICY.md` — authority policy across pre-init and post-init phases
 - `docs/runbooks/MAINNET_DRY_RUN.md` — exact manifest-driven launch validation
+- `docs/runbooks/OLD_MARKET_DEPRECATION.md` — anti-ghost-market launch and comms playbook
+- `docs/runbooks/OLD_LP_RETIREMENT.md` — mandatory retirement flow for controlled legacy liquidity
+- `docs/runbooks/OLD_MARKET_MONITORING.md` — post-open monitoring and escalation thresholds
+- `docs/runbooks/DEPRECATION_EVIDENCE.md` — release record for deprecation proofs, tx hashes, and sign-off
 - `sdk/README.md` — expected TypeScript SDK surface
 
 ## Current Verification
@@ -76,7 +80,7 @@ Out of scope for V1:
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
-- `LiteSVM` migration-flow suite currently covers `41` end-to-end cases
+- `LiteSVM` migration-flow suite currently covers `45` end-to-end cases
 - `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
 - `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
@@ -110,6 +114,10 @@ For mainnet launch controls, follow:
 
 - `docs/runbooks/MAINNET_PRELAUNCH.md`
 - `docs/runbooks/MAINNET_DRY_RUN.md`
+- `docs/runbooks/OLD_MARKET_DEPRECATION.md`
+- `docs/runbooks/OLD_LP_RETIREMENT.md`
+- `docs/runbooks/OLD_MARKET_MONITORING.md`
+- `docs/runbooks/DEPRECATION_EVIDENCE.md`
 - `docs/runbooks/VERIFIED_BUILD.md`
 - `docs/runbooks/UPGRADE_AUTHORITY_POLICY.md`
 
@@ -133,3 +141,15 @@ That means:
 - `migrate_exact` is open to any current holder that can burn valid `old QX`
 - the only hard on-chain limiter is the immutable global `migration_cap`
 - if some old balances are meant to stay excluded, they must be locked, burned, or otherwise operationally prevented from reaching live wallets before launch
+- any team-controlled old LP or market-making path left live at open is effectively an ingress into the migration reserve and must be treated as a launch blocker
+
+## Old Market Policy
+
+For V1, `old QX` is assumed to become non-canonical when migration opens.
+
+That means:
+
+- any team-controlled legacy LP must be retired before or at migration open
+- official routing, bots, docs, and analytics links must flip to the new mint at open
+- legacy price action must be treated as non-canonical immediately after deprecation
+- proof of the deprecation actions belongs in `docs/runbooks/DEPRECATION_EVIDENCE.md`

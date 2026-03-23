@@ -74,6 +74,7 @@ Already aligned:
 - formal checks for gate logic, layout stability, overflow behavior, and unaligned roundtrips
 - negative-path transaction tests for wrong mint, wrong vault, bad destination owner, bad reserve controls, and malformed entrypoint data
 - the canonical `Kani` lane is now `./scripts/run-kani-lane.sh` because the batch command is unstable on the pinned toolchain
+- old-market deprecation is now treated as a release-control issue, not just a comms issue, because a live team-controlled old LP is an ingress path into the reserve
 
 Still missing or intentionally off-chain:
 
@@ -91,3 +92,4 @@ If the goal is "ultra secure" before mainnet:
 3. keep the `Mollusk` lane live and add a broader `Trident` lane only if the program surface grows enough to justify it
 4. keep reserve-proof sign-off as a hard launch gate
 5. move upgrade authority to multisig or an explicit, published lock policy
+6. treat controlled old-LP retirement, evidence capture, and post-open monitoring as hard release controls

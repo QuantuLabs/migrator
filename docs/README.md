@@ -18,6 +18,10 @@ This repository separates public handoff documents from internal planning and op
 - `internal/checklists/TOKENKEG_ONLY_CHECKLIST.md`
 - `runbooks/MAINNET_PRELAUNCH.md`
 - `runbooks/MAINNET_DRY_RUN.md`
+- `runbooks/OLD_MARKET_DEPRECATION.md`
+- `runbooks/OLD_LP_RETIREMENT.md`
+- `runbooks/OLD_MARKET_MONITORING.md`
+- `runbooks/DEPRECATION_EVIDENCE.md`
 - `runbooks/EMERGENCY_PAUSE.md`
 - `runbooks/UPGRADE_AUTHORITY_POLICY.md`
 - `runbooks/VERIFIED_BUILD.md`

@@ -57,6 +57,11 @@ cd sdk
 npm run verify-program-authority -- <PROGRAM_ID> <EXPECTED_AUTHORITY|none>
 ```
 
+The verifier now checks both:
+
+- the executable program account ownership and `ProgramData` linkage
+- the derived `ProgramData` authority state
+
 ## Publication Requirements
 
 Publish all of:
@@ -68,4 +73,22 @@ Publish all of:
 - the point in the timeline when authority will be transferred or cleared
 
 If the authority state changes, update the public release inputs and rerun the
-dry-run validator before launch.
+dry-run validator before launch, including the quorum replay.
+
+## Launch Sequencing Constraint
+
+Do not treat upgrade-authority operations as independent from migration-open
+operations.
+
+Minimum safe release record:
+
+- reviewed manifest and dry-run quorum report
+- successful `initialize_config`
+- verified published config state
+- old-market deprecation execution plan
+- controlled old-LP retirement proof capture
+- upgrade-authority transfer or freeze proof, if that step happens the same day
+
+If authority transfer and old-market deprecation happen in the same launch
+window, capture both in the same release record and publish the resulting state
+once both are verified.
