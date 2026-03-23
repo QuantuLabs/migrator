@@ -86,6 +86,70 @@ export function resolveCommitment(): Commitment {
   return commitment;
 }
 
+function isPrivateIpv4Host(hostname: string): boolean {
+  const segments = hostname.split(".");
+  if (segments.length !== 4 || segments.some((segment) => !/^\d+$/.test(segment))) {
+    return false;
+  }
+
+  const [a, b] = segments.map((segment) => Number.parseInt(segment, 10));
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 192 && b === 168) ||
+    (a === 172 && b >= 16 && b <= 31)
+  );
+}
+
+function isPrivateIpv6Host(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "::1" || normalized.startsWith("fc") || normalized.startsWith("fd");
+}
+
+export function normalizeReleaseRpcUrl(rpcUrl: string, label = "rpcUrl"): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rpcUrl);
+  } catch (error) {
+    throw new Error(
+      `${label} must be a valid https URL: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error(`${label} must use https`);
+  }
+  if (parsed.username.length > 0 || parsed.password.length > 0) {
+    throw new Error(`${label} must not embed credentials`);
+  }
+  if (parsed.hostname.length === 0) {
+    throw new Error(`${label} must include a hostname`);
+  }
+  if (parsed.search.length > 0 || parsed.hash.length > 0) {
+    throw new Error(`${label} must not include query or fragment components`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    isPrivateIpv4Host(hostname) ||
+    isPrivateIpv6Host(hostname)
+  ) {
+    throw new Error(`${label} must not target localhost or a private-network host`);
+  }
+
+  parsed.hostname = hostname;
+  if (parsed.port === "443") {
+    parsed.port = "";
+  }
+
+  const normalized = parsed.toString();
+  return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+}
+
 function resolveFinality(commitment: Commitment): Finality {
   return commitment === "finalized" ? "finalized" : "confirmed";
 }

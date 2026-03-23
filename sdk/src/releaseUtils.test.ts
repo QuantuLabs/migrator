@@ -11,6 +11,7 @@ import {
   PROGRAMDATA_METADATA_LEN,
   TOKEN_ACCOUNT_LEN,
   isMainnetBetaGenesisHash,
+  normalizeReleaseRpcUrl,
   parseMintData,
   parseProgramData,
   parseTokenAccountData,
@@ -131,4 +132,17 @@ test("readReviewedBuildInfo rejects malformed executable hash", () => {
 test("isMainnetBetaGenesisHash matches the canonical mainnet hash only", () => {
   assert.equal(isMainnetBetaGenesisHash(MAINNET_BETA_GENESIS_HASH), true);
   assert.equal(isMainnetBetaGenesisHash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1"), false);
+});
+
+test("normalizeReleaseRpcUrl canonicalizes reviewed https rpc urls", () => {
+  assert.equal(
+    normalizeReleaseRpcUrl("https://RPC.EXAMPLE.com:443/"),
+    "https://rpc.example.com",
+  );
+});
+
+test("normalizeReleaseRpcUrl rejects insecure or private-network rpc urls", () => {
+  assert.throws(() => normalizeReleaseRpcUrl("http://rpc.example.com"));
+  assert.throws(() => normalizeReleaseRpcUrl("https://localhost:8899"));
+  assert.throws(() => normalizeReleaseRpcUrl("https://192.168.1.20"));
 });

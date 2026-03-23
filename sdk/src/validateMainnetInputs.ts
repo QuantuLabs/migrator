@@ -22,6 +22,7 @@ import {
     parseTokenAccountData,
     PROGRAMDATA_DISCRIMINATOR,
     readReviewedBuildInfo,
+    normalizeReleaseRpcUrl,
     resolveLocalPath,
     resolveCommitment,
     resolveRepoRoot,
@@ -118,11 +119,17 @@ function asOptionalStringArray(value: unknown, label: string): string[] | undefi
 export function parseInputs(raw: unknown): MainnetInputs {
   const record = asRecord(raw, "mainnet inputs");
   const verifiedBuild = asRecord(record.verifiedBuild, "verifiedBuild");
+  const secondaryRpcUrls = asOptionalStringArray(
+    record.secondaryRpcUrls,
+    "secondaryRpcUrls",
+  )?.map((entry, index) =>
+    normalizeReleaseRpcUrl(entry, `secondaryRpcUrls[${index}]`),
+  );
 
   return {
     cluster: asString(record.cluster, "cluster"),
-    rpcUrl: asString(record.rpcUrl, "rpcUrl"),
-    secondaryRpcUrls: asOptionalStringArray(record.secondaryRpcUrls, "secondaryRpcUrls"),
+    rpcUrl: normalizeReleaseRpcUrl(asString(record.rpcUrl, "rpcUrl"), "rpcUrl"),
+    secondaryRpcUrls,
     expectConfigInitialized: asBoolean(
       record.expectConfigInitialized,
       "expectConfigInitialized",
@@ -386,7 +393,7 @@ export async function main() {
   const inputsPath = resolvePath(inputsPathArg);
   const inputs = parseInputs(JSON.parse(readFileSync(inputsPath, "utf8")) as unknown);
   const commitment = resolveCommitment();
-  const connection = new Connection(process.env.SOLANA_RPC_URL || inputs.rpcUrl, commitment);
+  const connection = new Connection(inputs.rpcUrl, commitment);
 
   const report = await validateMainnetInputsReport({
     inputsPath,

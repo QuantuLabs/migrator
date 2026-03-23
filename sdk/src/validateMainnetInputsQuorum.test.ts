@@ -9,8 +9,8 @@ import {
   parseRpcUrlList,
 } from "./validateMainnetInputsQuorum.ts";
 
-test("parseRpcUrlList splits and trims comma-separated urls", () => {
-  assert.deepEqual(parseRpcUrlList(" https://a.invalid , ,https://b.invalid "), [
+test("parseRpcUrlList splits, trims, and normalizes comma-separated urls", () => {
+  assert.deepEqual(parseRpcUrlList(" https://a.invalid , ,https://b.invalid/ "), [
     "https://a.invalid",
     "https://b.invalid",
   ]);

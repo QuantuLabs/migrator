@@ -8,7 +8,11 @@ import {
   parseInputs,
   validateMainnetInputsReport,
 } from "./validateMainnetInputs.ts";
-import { resolveCommitment, runCliMain } from "./releaseUtils.ts";
+import {
+  normalizeReleaseRpcUrl,
+  resolveCommitment,
+  runCliMain,
+} from "./releaseUtils.ts";
 
 type MainnetValidationReport = Awaited<ReturnType<typeof validateMainnetInputsReport>>;
 
@@ -20,7 +24,8 @@ export function parseRpcUrlList(raw: string | undefined): string[] {
   return raw
     .split(",")
     .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+    .filter((entry) => entry.length > 0)
+    .map((entry, index) => normalizeReleaseRpcUrl(entry, `SOLANA_RPC_URLS[${index}]`));
 }
 
 export function normalizeQuorumRpcUrls(params: {
@@ -29,7 +34,7 @@ export function normalizeQuorumRpcUrls(params: {
   envRpcUrls?: string;
 }): string[] {
   const merged = [
-    params.primaryRpcUrl,
+    normalizeReleaseRpcUrl(params.primaryRpcUrl, "primaryRpcUrl"),
     ...(params.secondaryRpcUrls ?? []),
     ...parseRpcUrlList(params.envRpcUrls),
   ];
@@ -187,7 +192,7 @@ export async function main() {
   const inputs = parseInputs(JSON.parse(readFileSync(inputsPath, "utf8")) as unknown);
   const commitment = resolveCommitment();
   const rpcUrls = normalizeQuorumRpcUrls({
-    primaryRpcUrl: process.env.SOLANA_RPC_URL || inputs.rpcUrl,
+    primaryRpcUrl: inputs.rpcUrl,
     secondaryRpcUrls: inputs.secondaryRpcUrls,
     envRpcUrls: process.env.SOLANA_RPC_URLS,
   });
