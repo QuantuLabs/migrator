@@ -4,8 +4,8 @@
 
 Provide a minimal, auditable migration path:
 
-- burn `old QX`
-- receive the same amount of `new QX`
+- burn a source token
+- receive the same amount of a destination token
 - no pricing
 - no snapshot-based retail claim path
 - no airdrop logic in the program
@@ -15,6 +15,12 @@ Token policy:
 - V1 is `Tokenkeg` only
 - V1 does not support `Token-2022`
 
+Naming note:
+
+- V1 keeps historical on-chain field names such as `old_qx_mint` and `new_qx_mint`
+  for binary compatibility, even though this document describes them generically
+  as source and destination mints.
+
 ## Fixed V1 Decisions
 
 1. Ratio is fixed at `1:1`.
@@ -23,7 +29,7 @@ Token policy:
 4. Reserve is held in a token account owned by a PDA controlled by the program.
 5. No per-user migration account is stored on-chain in V1.
 6. Snapshot is off-chain audit data only.
-7. V1 is open to any live holder of burnable `old QX`; there is no on-chain allowlist or Merkle root.
+7. V1 is open to any live holder of the burnable source token; there is no on-chain allowlist or Merkle root.
 8. No late-claim penalty in V1.
 9. No admin instruction can change the ratio or swap the mint addresses after initialization.
 10. After expiry, V1 sweeps the full reserve-vault balance back to the configured refund wallet.
@@ -49,12 +55,12 @@ Expected accounts:
 1. `[signer, writable]` initializer authority
 2. `[signer]` ops admin / multisig
 3. `[signer]` funding authority
-4. `[writable]` funding authority new QX token account
+4. `[writable]` funding authority destination-token account
 5. `[writable]` config PDA
 6. `[]` vault authority PDA
-7. `[writable]` vault new QX token account
-8. `[]` old QX mint
-9. `[]` new QX mint
+7. `[writable]` reserve vault destination-token account
+8. `[]` source mint
+9. `[]` destination mint
 10. `[]` token program
 11. `[]` system program
 12. `[]` program data account
@@ -64,19 +70,19 @@ Required checks:
 - initializer matches the program upgrade authority from `ProgramData`
 - config PDA matches seeds
 - vault authority PDA matches seeds
-- `old QX` mint and `new QX` mint are different
+- source mint and destination mint are different
 - neither mint is the native mint / wrapped-SOL mint
 - both mints belong to the same supported token program
 - both mints are initialized
 - both mints have `mintAuthority == None`
 - both mints have `freezeAuthority == None`
 - both mints have matching decimals
-- reserve vault mint equals `new QX`
+- reserve vault mint equals the destination token
 - reserve vault owner equals vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
 - reserve vault starts empty at initialization time
 - funding source account owner equals `funding_authority`
-- funding source account mint equals `new QX`
+- funding source account mint equals the destination token
 - funding source delegate and close-authority controls are cleared
 - `migration_cap > 0`
 - funding source balance is at least `migration_cap`
@@ -110,11 +116,11 @@ Expected accounts:
 1. `[signer]` user
 2. `[writable]` config PDA
 3. `[]` vault authority PDA
-4. `[writable]` vault new QX token account
-5. `[writable]` user old QX token account
-6. `[writable]` user new QX token account
-7. `[writable]` old QX mint
-8. `[]` new QX mint
+4. `[writable]` reserve vault destination-token account
+5. `[writable]` user source-token account
+6. `[writable]` user destination-token account
+7. `[writable]` source mint
+8. `[]` destination mint
 9. `[]` token program
 
 Required checks:
@@ -124,13 +130,13 @@ Required checks:
 - `config.paused == false`
 - config PDA and vault PDA seeds re-derive on-chain
 - user old token account owner is `user`
-- user old token account mint is `old QX`
+- user source-token account mint is the source token
 - user new token account owner is `user`
-- user new token account mint is `new QX`
-- user new token account address is the canonical ATA for `(user, new QX mint)`
+- user destination-token account mint is the destination token
+- user destination-token account address is the canonical ATA for `(user, destination mint)`
 - user new token account has no delegate, close-authority, or wrapped-native controls
 - both user token accounts are initialized
-- reserve vault mint is `new QX`
+- reserve vault mint is the destination token
 - reserve vault owner is vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
 - reserve vault balance is at least `amount_in`
@@ -138,8 +144,8 @@ Required checks:
 
 Effects:
 
-1. burn `amount_in` from `user old QX`
-2. transfer `amount_in` from reserve vault to `user new QX`
+1. burn `amount_in` from the user source-token account
+2. transfer `amount_in` from the reserve vault to the user destination-token account
 3. increment `config.total_migrated`
 4. emit migration log marker
 
@@ -159,9 +165,9 @@ Expected accounts:
 
 1. `[writable]` config PDA
 2. `[]` vault authority PDA
-3. `[writable]` vault new QX token account
-4. `[writable]` refund recipient new QX ATA
-5. `[]` new QX mint
+3. `[writable]` reserve vault destination-token account
+4. `[writable]` refund recipient destination-token ATA
+5. `[]` destination mint
 6. `[]` token program
 
 Required checks:
@@ -174,10 +180,10 @@ Required checks:
 - reserve vault account equals `config.vault_new_qx`
 - reserve vault owner equals vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
-- new mint matches `config.new_qx_mint`
+- destination mint matches `config.new_qx_mint`
 - destination account owner equals the configured `refund_recipient`
-- destination account mint equals `new QX`
-- destination account address equals the canonical ATA for `(refund_recipient, new QX mint)`
+- destination account mint equals the destination token
+- destination account address equals the canonical ATA for `(refund_recipient, destination mint)`
 - `vault balance > 0`
 
 Effects:
@@ -226,8 +232,8 @@ Padding note:
 3. `config.vault_new_qx` never changes after init.
 4. `total_migrated` is monotonic.
 5. `total_migrated <= migration_cap`.
-6. Program never mints `new QX`; it only transfers from a reserve funded during `initialize_config`.
-7. Program never transfers `old QX` anywhere; it only burns it.
+6. Program never mints the destination token; it only transfers from a reserve funded during `initialize_config`.
+7. Program never transfers the source token anywhere; it only burns it.
 8. Program never accepts a caller-provided authority or destination without validating it against config and PDA seeds.
 9. `withdraw_unclaimed` is one-shot.
 

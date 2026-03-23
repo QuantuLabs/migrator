@@ -1,30 +1,42 @@
 # Docs Index
 
-This repository separates public handoff documents from internal planning and ops material.
+Documentation for **Migrator**, built by **Quantu Labs**.
+
+Repository documentation is split by audience so release-critical information
+stays easy to audit.
 
 ## Structure
 
-- `handoff/` — documents the frontend and integrator contract
-- `internal/` — planning, audit notes, and internal checklists
-- `runbooks/` — launch-day and emergency operating procedures
-- `../release/` — filled launch manifests and verified-build metadata
+- `handoff/` — frontend and integrator contract
+- `internal/` — audit notes, plans, and internal checklists
+- `runbooks/` — launch-day, release, and emergency operating procedures
+- `../release/` — manifests and release-record templates
 
-## Entry Points
+## Recommended Entry Points
 
+Public / integrator-facing:
+
+- `handoff/README.md`
 - `handoff/PROGRAM_SPEC.md`
+
+Internal review:
+
+- `internal/README.md`
 - `internal/AUDIT.md`
-- `internal/GENERICIZATION_PLAN.md`
 - `internal/SECURITY_BASELINE.md`
-- `internal/PLAN_9_DAYS.md`
-- `internal/checklists/TOKENKEG_ONLY_CHECKLIST.md`
+- `internal/GENERICIZATION_PLAN.md`
+
+Release operations:
+
 - `runbooks/MAINNET_PRELAUNCH.md`
 - `runbooks/MAINNET_DRY_RUN.md`
+- `runbooks/VERIFIED_BUILD.md`
+- `runbooks/UPGRADE_AUTHORITY_POLICY.md`
+- `runbooks/EMERGENCY_PAUSE.md`
+
+Legacy-market controls:
+
 - `runbooks/OLD_MARKET_DEPRECATION.md`
 - `runbooks/OLD_LP_RETIREMENT.md`
 - `runbooks/OLD_MARKET_MONITORING.md`
 - `runbooks/DEPRECATION_EVIDENCE.md`
-- `runbooks/EMERGENCY_PAUSE.md`
-- `runbooks/UPGRADE_AUTHORITY_POLICY.md`
-- `runbooks/VERIFIED_BUILD.md`
-- `runbooks/KANI_LANE.md`
-- `runbooks/MOLLUSK_LANE.md`

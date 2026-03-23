@@ -1,15 +1,16 @@
 # Handoff Docs
 
-This folder is for the frontend team and any external integrator.
+This folder is for the frontend team and external integrators.
 
-Keep only interface-level documents here:
+Keep only interface-level material here:
 
 - account order
 - instruction payloads
 - PDA derivation rules
-- decoding formats
+- config decoding layout
 - client-side assumptions
+- release-facing caveats that affect integration behavior
 
-Current primary document:
+Primary document:
 
 - `PROGRAM_SPEC.md`
