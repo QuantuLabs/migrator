@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve as resolvePath } from "node:path";
@@ -10,8 +10,60 @@ export const MINT_LEN = 82;
 export const TOKEN_ACCOUNT_LEN = 165;
 export const PROGRAMDATA_METADATA_LEN = 45;
 export const PROGRAMDATA_DISCRIMINATOR = 3;
+export const MAINNET_BETA_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+
+export type ReviewedBuildInfo = {
+  generatedAt: string;
+  gitCommit: string;
+  libraryName: string;
+  arch: string;
+  mountBaseDir: string;
+  mountPath: string;
+  dockerPlatform: string;
+  programSoPath: string;
+  executableHash: string;
+  programId: string | null;
+  onChainHash: string | null;
+  matchesOnChain: boolean | null;
+  solanaVerifyVersion: string;
+  solanaCliVersion: string;
+};
 
 type ParsedAccountKey = PublicKey | string | { pubkey: PublicKey | string };
+
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function asString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function asOptionalString(value: unknown, label: string): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a string or null`);
+  }
+  return value;
+}
+
+function asOptionalBoolean(value: unknown, label: string): boolean | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean or null`);
+  }
+  return value;
+}
 
 function parsedAccountKeyToBase58(accountKey: ParsedAccountKey): string {
   if (accountKey instanceof PublicKey) {
@@ -43,6 +95,46 @@ export function resolveRepoRoot(metaUrl: string): string {
 
 export function resolveLocalPath(basePath: string, targetPath: string): string {
   return resolvePath(basePath, targetPath);
+}
+
+export function readReviewedBuildInfo(buildInfoPath: string): ReviewedBuildInfo {
+  if (!existsSync(buildInfoPath)) {
+    throw new Error(`Reviewed build info not found: ${buildInfoPath}`);
+  }
+  if (!statSync(buildInfoPath).isFile()) {
+    throw new Error(`Reviewed build info is not a file: ${buildInfoPath}`);
+  }
+
+  const record = asRecord(JSON.parse(readFileSync(buildInfoPath, "utf8")) as unknown, "build info");
+  const reviewedBuildInfo: ReviewedBuildInfo = {
+    generatedAt: asString(record.generatedAt, "buildInfo.generatedAt"),
+    gitCommit: asString(record.gitCommit, "buildInfo.gitCommit"),
+    libraryName: asString(record.libraryName, "buildInfo.libraryName"),
+    arch: asString(record.arch, "buildInfo.arch"),
+    mountBaseDir: asString(record.mountBaseDir, "buildInfo.mountBaseDir"),
+    mountPath: asString(record.mountPath, "buildInfo.mountPath"),
+    dockerPlatform: asString(record.dockerPlatform, "buildInfo.dockerPlatform"),
+    programSoPath: asString(record.programSoPath, "buildInfo.programSoPath"),
+    executableHash: asString(record.executableHash, "buildInfo.executableHash"),
+    programId: asOptionalString(record.programId, "buildInfo.programId"),
+    onChainHash: asOptionalString(record.onChainHash, "buildInfo.onChainHash"),
+    matchesOnChain: asOptionalBoolean(record.matchesOnChain, "buildInfo.matchesOnChain"),
+    solanaVerifyVersion: asString(record.solanaVerifyVersion, "buildInfo.solanaVerifyVersion"),
+    solanaCliVersion: asString(record.solanaCliVersion, "buildInfo.solanaCliVersion"),
+  };
+
+  if (!/^[0-9a-f]{40}$/i.test(reviewedBuildInfo.gitCommit)) {
+    throw new Error("buildInfo.gitCommit must be a full 40-character git hash");
+  }
+  if (!/^[0-9a-f]{64}$/i.test(reviewedBuildInfo.executableHash)) {
+    throw new Error("buildInfo.executableHash must be a 64-character hex string");
+  }
+
+  return reviewedBuildInfo;
+}
+
+export function isMainnetBetaGenesisHash(genesisHash: string): boolean {
+  return genesisHash === MAINNET_BETA_GENESIS_HASH;
 }
 
 export function parseMintData(data: Buffer) {

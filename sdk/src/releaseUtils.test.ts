@@ -1,14 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
+  MAINNET_BETA_GENESIS_HASH,
   MINT_LEN,
   PROGRAMDATA_DISCRIMINATOR,
   PROGRAMDATA_METADATA_LEN,
   TOKEN_ACCOUNT_LEN,
+  isMainnetBetaGenesisHash,
   parseMintData,
   parseProgramData,
   parseTokenAccountData,
+  readReviewedBuildInfo,
 } from "./releaseUtils.ts";
 
 test("parseMintData enforces strict mint length and fields", () => {
@@ -62,4 +68,67 @@ test("parseProgramData enforces metadata length and authority decoding", () => {
   assert.equal(parsed.authorityOption, 1);
   assert.match(parsed.authority ?? "", /^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   assert.throws(() => parseProgramData(Buffer.alloc(PROGRAMDATA_METADATA_LEN - 1)));
+});
+
+test("readReviewedBuildInfo parses reviewed verified-build metadata", () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), "migrator-build-info-"));
+  const buildInfoPath = join(tmpDir, "migrator_program.build-info.json");
+
+  writeFileSync(
+    buildInfoPath,
+    JSON.stringify({
+      generatedAt: "2026-03-23T08:04:30Z",
+      gitCommit: "caa4ac26af86ed78773cdf9ed417013df011f82c",
+      libraryName: "migrator_program",
+      arch: "v0",
+      mountBaseDir: "/tmp",
+      mountPath: "./svbmount",
+      dockerPlatform: "linux/amd64",
+      programSoPath: "/tmp/migrator_program.so",
+      executableHash: "089d580bc1a69f9fecbf466e18f5b7186b3818fee0a567f8ee4c46ace0d84e25",
+      programId: null,
+      onChainHash: null,
+      matchesOnChain: null,
+      solanaVerifyVersion: "solana-verify 0.4.12",
+      solanaCliVersion: "solana-cli 2.3.10",
+    }),
+  );
+
+  assert.equal(readReviewedBuildInfo(buildInfoPath).libraryName, "migrator_program");
+
+  rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test("readReviewedBuildInfo rejects malformed executable hash", () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), "migrator-build-info-bad-"));
+  const buildInfoPath = join(tmpDir, "migrator_program.build-info.json");
+
+  writeFileSync(
+    buildInfoPath,
+    JSON.stringify({
+      generatedAt: "2026-03-23T08:04:30Z",
+      gitCommit: "caa4ac26af86ed78773cdf9ed417013df011f82c",
+      libraryName: "migrator_program",
+      arch: "v0",
+      mountBaseDir: "/tmp",
+      mountPath: "./svbmount",
+      dockerPlatform: "linux/amd64",
+      programSoPath: "/tmp/migrator_program.so",
+      executableHash: "bad-hash",
+      programId: null,
+      onChainHash: null,
+      matchesOnChain: null,
+      solanaVerifyVersion: "solana-verify 0.4.12",
+      solanaCliVersion: "solana-cli 2.3.10",
+    }),
+  );
+
+  assert.throws(() => readReviewedBuildInfo(buildInfoPath));
+
+  rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test("isMainnetBetaGenesisHash matches the canonical mainnet hash only", () => {
+  assert.equal(isMainnetBetaGenesisHash(MAINNET_BETA_GENESIS_HASH), true);
+  assert.equal(isMainnetBetaGenesisHash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1"), false);
 });

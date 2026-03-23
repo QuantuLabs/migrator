@@ -4,33 +4,38 @@ import { resolve as resolvePath } from "node:path";
 import { Commitment, Connection, PublicKey } from "@solana/web3.js";
 
 import {
-  BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
-  MIGRATION_CONFIG_SIZE,
-  TOKEN_PROGRAM_ID,
-  decodeMigrationConfig,
+    BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
+    MIGRATION_CONFIG_SIZE,
+    TOKEN_PROGRAM_ID,
+    decodeMigrationConfig,
   findMigrationConfigPda,
   findProgramDataPda,
   findVaultAuthorityPda,
 } from "./index.ts";
 import {
-  computeExecutableHash,
-  resolveLocalPath,
-  resolveRepoRoot,
-  verifyFundingSignature,
+    computeExecutableHash,
+    isMainnetBetaGenesisHash,
+    parseMintData,
+    parseProgramData,
+    parseTokenAccountData,
+    PROGRAMDATA_DISCRIMINATOR,
+    readReviewedBuildInfo,
+    resolveLocalPath,
+    resolveCommitment,
+    resolveRepoRoot,
+    verifyFundingSignature,
 } from "./releaseUtils.ts";
 
-const MINT_LEN = 82;
-const TOKEN_ACCOUNT_LEN = 165;
 const PROGRAM_ACCOUNT_METADATA_LEN = 36;
 const PROGRAM_DISCRIMINATOR = 2;
-const PROGRAMDATA_METADATA_LEN = 45;
-const PROGRAMDATA_DISCRIMINATOR = 3;
+const NATIVE_MINT_BASE58 = "So11111111111111111111111111111111111111112";
 
 type VerifiedBuildInputs = {
   libraryName: string;
   mountPath: string;
   arch: string;
   programSoPath: string;
+  buildInfoPath?: string;
   expectedExecutableHash: string;
   repoUrl: string | null;
   commitHash: string;
@@ -133,6 +138,10 @@ function parseInputs(raw: unknown): MainnetInputs {
       mountPath: asString(verifiedBuild.mountPath, "verifiedBuild.mountPath"),
       arch: asString(verifiedBuild.arch, "verifiedBuild.arch"),
       programSoPath: asString(verifiedBuild.programSoPath, "verifiedBuild.programSoPath"),
+      buildInfoPath:
+        verifiedBuild.buildInfoPath === undefined
+          ? undefined
+          : asString(verifiedBuild.buildInfoPath, "verifiedBuild.buildInfoPath"),
       expectedExecutableHash: asString(
         verifiedBuild.expectedExecutableHash,
         "verifiedBuild.expectedExecutableHash",
@@ -141,59 +150,6 @@ function parseInputs(raw: unknown): MainnetInputs {
       commitHash: asString(verifiedBuild.commitHash, "verifiedBuild.commitHash"),
     },
   };
-}
-
-function resolveCommitment(): Commitment {
-  const commitment = (process.env.SOLANA_COMMITMENT || "finalized") as Commitment;
-  if (!["processed", "confirmed", "finalized"].includes(commitment)) {
-    throw new Error(`Invalid SOLANA_COMMITMENT: ${commitment}`);
-  }
-  return commitment;
-}
-
-function parseMintData(data: Buffer) {
-  if (data.length !== MINT_LEN) {
-    throw new Error(`Mint data must be ${MINT_LEN} bytes, got ${data.length}`);
-  }
-
-  return {
-    mintAuthorityOption: data.readUInt32LE(0),
-    supply: data.readBigUInt64LE(36),
-    decimals: data[44],
-    isInitialized: data[45] === 1,
-    freezeAuthorityOption: data.readUInt32LE(46),
-  };
-}
-
-function parseTokenAccountData(data: Buffer) {
-  if (data.length !== TOKEN_ACCOUNT_LEN) {
-    throw new Error(`Token account data must be ${TOKEN_ACCOUNT_LEN} bytes, got ${data.length}`);
-  }
-
-  return {
-    mint: new PublicKey(data.subarray(0, 32)).toBase58(),
-    owner: new PublicKey(data.subarray(32, 64)).toBase58(),
-    amount: data.readBigUInt64LE(64),
-    delegateOption: data.readUInt32LE(72),
-    state: data[108],
-    delegatedAmount: data.readBigUInt64LE(121),
-    closeAuthorityOption: data.readUInt32LE(129),
-  };
-}
-
-function parseProgramData(data: Buffer) {
-  if (data.length < PROGRAMDATA_METADATA_LEN) {
-    throw new Error(
-      `ProgramData account too short: expected at least ${PROGRAMDATA_METADATA_LEN}, got ${data.length}`,
-    );
-  }
-
-  const stateDiscriminator = data.readUInt32LE(0);
-  const authorityOption = data[12];
-  const authority =
-    authorityOption === 1 ? new PublicKey(data.subarray(13, 45)).toBase58() : null;
-
-  return { stateDiscriminator, authorityOption, authority };
 }
 
 function parseProgramAccount(data: Buffer) {
@@ -242,6 +198,12 @@ async function main() {
     resolvedMountPath,
     inputs.verifiedBuild.programSoPath,
   );
+  const resolvedBuildInfoPath = resolveLocalPath(
+    repoRoot,
+    inputs.verifiedBuild.buildInfoPath ??
+      `artifacts/verified-build/${inputs.verifiedBuild.libraryName}.build-info.json`,
+  );
+  const reviewedBuildInfo = readReviewedBuildInfo(resolvedBuildInfoPath);
 
   if (!["v0", "v1", "v2", "v3"].includes(inputs.verifiedBuild.arch)) {
     throw new Error(`Invalid verifiedBuild.arch: ${inputs.verifiedBuild.arch}`);
@@ -262,15 +224,13 @@ async function main() {
   const [vaultAuthorityPda, vaultAuthorityBump] = findVaultAuthorityPda(programId);
   const [programDataPda] = findProgramDataPda(programId);
 
-  const slot = await connection.getSlot(commitment);
-  const [programInfo, programDataInfo, oldMintInfo, mintInfo, reserveInfo, configInfo, fundingStatuses, fundingObservation] =
+  const [observedGenesisHash, accountSnapshot, fundingStatuses, fundingObservation] =
     await Promise.all([
-      connection.getAccountInfo(programId, commitment),
-      connection.getAccountInfo(programDataPda, commitment),
-      connection.getAccountInfo(oldQxMint, commitment),
-      connection.getAccountInfo(newQxMint, commitment),
-      connection.getAccountInfo(reserveVault, commitment),
-      connection.getAccountInfo(configPda, commitment),
+      connection.getGenesisHash(),
+      connection.getMultipleAccountsInfoAndContext(
+        [programId, programDataPda, oldQxMint, newQxMint, reserveVault, configPda],
+        commitment,
+      ),
       inputs.fundingSignature
         ? connection.getSignatureStatuses([inputs.fundingSignature], {
             searchTransactionHistory: true,
@@ -286,6 +246,9 @@ async function main() {
           )
         : Promise.resolve(null),
     ]);
+  const slot = accountSnapshot.context.slot;
+  const [programInfo, programDataInfo, oldMintInfo, mintInfo, reserveInfo, configInfo] =
+    accountSnapshot.value;
 
   if (!programInfo) {
     throw new Error(`Program account not found: ${programId.toBase58()}`);
@@ -321,7 +284,8 @@ async function main() {
   const executableHash = computeExecutableHash(resolvedProgramSoPath);
 
   const checks = {
-    clusterIsMainnetBeta: inputs.cluster === "mainnet-beta",
+    clusterManifestRequestsMainnetBeta: inputs.cluster === "mainnet-beta",
+    clusterGenesisHashMatchesMainnetBeta: isMainnetBetaGenesisHash(observedGenesisHash),
     migrationWindowIsValid: startTs <= endTs,
     migrationCapEqualsEligibleRawUnits: migrationCapRaw === eligibleRawUnits,
     initializerMatchesExpectedUpgradeAuthority:
@@ -333,6 +297,18 @@ async function main() {
     verifiedBuildProgramSoPathPresent: inputs.verifiedBuild.programSoPath.length > 0,
     verifiedBuildExecutableHashMatches:
       executableHash.toLowerCase() === inputs.verifiedBuild.expectedExecutableHash.toLowerCase(),
+    reviewedBuildInfoCommitMatchesManifest:
+      reviewedBuildInfo.gitCommit.toLowerCase() === inputs.verifiedBuild.commitHash.toLowerCase(),
+    reviewedBuildInfoLibraryNameMatchesManifest:
+      reviewedBuildInfo.libraryName === inputs.verifiedBuild.libraryName,
+    reviewedBuildInfoArchMatchesManifest: reviewedBuildInfo.arch === inputs.verifiedBuild.arch,
+    reviewedBuildInfoProgramSoPathMatchesManifest:
+      reviewedBuildInfo.programSoPath === resolvedProgramSoPath,
+    reviewedBuildInfoExecutableHashMatchesManifest:
+      reviewedBuildInfo.executableHash.toLowerCase() ===
+      inputs.verifiedBuild.expectedExecutableHash.toLowerCase(),
+    reviewedBuildInfoExecutableHashMatchesLocal:
+      reviewedBuildInfo.executableHash.toLowerCase() === executableHash.toLowerCase(),
     programOwnedByUpgradeableLoader: programInfo.owner.equals(BPF_LOADER_UPGRADEABLE_PROGRAM_ID),
     programExecutable: programInfo.executable,
     programStateDiscriminatorMatches: parsedProgram.stateDiscriminator === PROGRAM_DISCRIMINATOR,
@@ -357,6 +333,7 @@ async function main() {
     oldMintAuthorityDisabled: parsedOldMint.mintAuthorityOption === 0,
     oldFreezeAuthorityDisabled: parsedOldMint.freezeAuthorityOption === 0,
     oldMintDecimalsMatchExpected: parsedOldMint.decimals === inputs.expectedDecimals,
+    oldMintIsNotNativeMint: oldQxMint.toBase58() !== NATIVE_MINT_BASE58,
     oldMintDiffersFromNewMint: oldQxMint.toBase58() !== newQxMint.toBase58(),
     reserveOwnedByTokenkeg: reserveInfo.owner.equals(TOKEN_PROGRAM_ID),
     reserveMintMatchesNewMint: parsedReserve.mint === newQxMint.toBase58(),
@@ -443,6 +420,7 @@ async function main() {
         rpcUrl: connection.rpcEndpoint,
         commitment,
         slot,
+        accountSnapshotSlot: slot,
         phase: inputs.expectConfigInitialized ? "post-init" : "pre-init",
         inputs: {
           cluster: inputs.cluster,
@@ -471,11 +449,14 @@ async function main() {
           vaultAuthorityBump,
         },
         observed: {
+          genesisHash: observedGenesisHash,
           programDataAddressFromProgram: parsedProgram.programDataAddress,
           oldMintSupplyRaw: parsedOldMint.supply.toString(),
           oldMintDecimals: parsedOldMint.decimals,
           programDataAuthority: parsedProgramData.authority,
           verifiedBuildExecutableHash: executableHash,
+          reviewedBuildInfoPath: resolvedBuildInfoPath,
+          reviewedBuildInfo,
           verifiedBuildResolvedMountPath: resolvedMountPath,
           verifiedBuildResolvedProgramSoPath: resolvedProgramSoPath,
           mintSupplyRaw: parsedMint.supply.toString(),

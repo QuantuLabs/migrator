@@ -52,6 +52,8 @@ This validates:
 - current on-chain upgrade authority
 - final mint policy
 - local verified executable hash against the reviewed manifest
+- reviewed `build-info` record against the reviewed manifest and local artifact
+- RPC identity against the canonical `mainnet-beta` genesis hash
 - reserve vault policy
 - reserve sufficiency
 - config PDA absence before init
