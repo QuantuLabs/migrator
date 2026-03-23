@@ -107,7 +107,7 @@ What is still missing before mainnet confidence:
 
 Risk:
 
-- `1:1` is socially dead if the approved eligible supply is wrong or if the reserve cannot cover that approved total.
+- `1:1` is socially dead if the approved migration total is wrong or if the reserve cannot cover that approved total.
 - the program now binds an immutable on-chain `migration_cap` and rejects initialization unless the reserve vault already covers it.
 - the remaining trust surface is the off-chain selection of the approved migration total and any excluded balances, not an unbounded on-chain drain past that cap.
 
