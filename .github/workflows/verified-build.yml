@@ -28,11 +28,13 @@ jobs:
 
       - name: Install solana-verify
         run: |
-          cargo install \
-            --git https://github.com/solana-foundation/solana-verifiable-build \
-            --tag v0.4.12 \
-            solana-verify \
-            --force
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL \
+            https://github.com/solana-foundation/solana-verifiable-build/releases/download/v0.4.12/solana-verify-linux \
+            -o "$HOME/.local/bin/solana-verify"
+          chmod +x "$HOME/.local/bin/solana-verify"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/solana-verify" --version
 
       - name: Run verified-build lane
         run: ./scripts/run-verified-build.sh
