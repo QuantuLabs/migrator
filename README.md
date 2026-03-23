@@ -70,6 +70,7 @@ Out of scope for V1:
 - `docs/runbooks/OLD_LP_RETIREMENT.md` — mandatory retirement flow for controlled legacy liquidity
 - `docs/runbooks/OLD_MARKET_MONITORING.md` — post-open monitoring and escalation thresholds
 - `docs/runbooks/DEPRECATION_EVIDENCE.md` — release record for deprecation proofs, tx hashes, and sign-off
+- `scripts/run-local-assurance-lane.sh` — single-command local assurance sequence across Rust, SDK, SBF, Mollusk, and Kani
 - `sdk/README.md` — expected TypeScript SDK surface
 
 ## Current Verification
@@ -86,6 +87,7 @@ Out of scope for V1:
 - direct `cargo test --test mollusk_fuzz_lane` is not a release-authoritative substitute because it can reuse an already-built `target/deploy` artifact instead of rebuilding the SBF binary first
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
 - `./scripts/run-verified-build.sh` is the canonical deterministic-build lane
+- `./scripts/run-local-assurance-lane.sh` is the canonical local pre-release sequence; it runs verified-build only when the git worktree is clean unless `ASSURANCE_REQUIRE_VERIFIED_BUILD=1`
 - `.github/workflows/verified-build.yml` runs the deterministic-build lane on `push`, `pull_request`, and `workflow_dispatch`
 - `./scripts/run-mainnet-dry-run.sh <filled-inputs.json>` is the canonical release-input validator
 - `sdk/` release-report tests cover `validateMainnetInputs`, `verifyProgramAuthority`, `verifyConfig`, `verifyReserveVault`, `verifyMint`, and `generateReserveProof` builders
