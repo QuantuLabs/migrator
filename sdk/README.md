@@ -21,6 +21,7 @@ Implemented in:
 - `sdk/src/verifyConfig.ts`
 - `sdk/src/verifyProgramAuthority.ts`
 - `sdk/src/generateReserveProof.ts`
+- `sdk/src/validateMainnetInputs.ts`
 
 Expected functions:
 
@@ -44,11 +45,12 @@ The frontend can then handle:
 Operational verification commands:
 
 ```bash
-npm run verify-mint -- <NEW_QX_MINT> [EXPECTED_DECIMALS]
+npm run verify-mint -- <NEW_QX_MINT> <EXPECTED_DECIMALS>
 npm run verify-vault -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>
-npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW>
-npm run verify-program-authority -- <PROGRAM_ID> [EXPECTED_AUTHORITY|none]
+npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW>
+npm run verify-program-authority -- <PROGRAM_ID> <EXPECTED_AUTHORITY|none>
 npm run reserve-proof -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]
+npm run validate-mainnet-inputs -- <PATH_TO_MAINNET_INPUTS_JSON>
 ```
 
 All verification commands are hard gates:
@@ -57,3 +59,12 @@ All verification commands are hard gates:
 - exit nonzero on any mismatch so they can be used directly in prelaunch checklists and CI
 - default to `SOLANA_COMMITMENT=finalized`
 - include `rpcUrl`, `commitment`, and `slot` in their JSON output for reproducible audit artifacts
+
+`validate-mainnet-inputs` also verifies:
+
+- program-account ownership, executability, and linkage to the derived `ProgramData` PDA
+- old-mint policy as well as new-mint policy
+- verified executable hash against the local `solana-verify` artifact path recorded in the manifest
+- config PDA absence before init and exact config field matches after init, including `startTs`, `endTs`, `paused`, and `totalMigrated`
+- reserve sufficiency against the reviewed eligible raw-unit total
+- optional funding-signature success/finalization plus proof that the signature touched the reviewed reserve vault and mint when one is recorded in the manifest

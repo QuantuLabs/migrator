@@ -22,6 +22,7 @@ Primary references:
 - Solana program security course: bump seed canonicalization
 - Solana program security course: reinitialization attacks
 - Solana verified builds guide
+- solana-verifiable-build README guidance for Pinocchio/SDK-v3 projects using `[workspace.metadata.cli]`
 
 ## Pinocchio-Specific Notes
 
@@ -77,7 +78,7 @@ Already aligned:
 Still missing or intentionally off-chain:
 
 - reserve sufficiency is now partially bound on-chain through `migration_cap` plus an init-time vault-balance check, but the eligible-supply input still requires operational review
-- verified-build publication is still a prelaunch step, not yet automated in this repo
+- verified-build publication is a prelaunch step and now has a canonical script, but it still depends on the operator using the reviewed commit and publishing the resulting metadata
 - `Mollusk` is now the active fuzz-fixture lane for this repo; `Trident` remains optional later if we ever need a heavier stateful fuzzing workflow
 - some LiteSVM tests still skip if the SBF artifact is missing locally
 

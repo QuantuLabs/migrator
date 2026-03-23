@@ -58,8 +58,12 @@ Out of scope for V1:
 - `docs/internal/AUDIT.md` — security and anti-drama audit
 - `docs/internal/checklists/TOKENKEG_ONLY_CHECKLIST.md` — pre-launch verification checklist for the final Bags mint
 - `docs/runbooks/` — ops runbooks for launch and emergency handling
+- `release/` — reviewed launch manifests and verified-build metadata templates
 - `docs/runbooks/KANI_LANE.md` — authoritative per-harness formal-proof lane
 - `docs/runbooks/MOLLUSK_LANE.md` — SVM-native fuzz-fixture lane
+- `docs/runbooks/VERIFIED_BUILD.md` — deterministic build and hash publication flow
+- `docs/runbooks/UPGRADE_AUTHORITY_POLICY.md` — authority policy across pre-init and post-init phases
+- `docs/runbooks/MAINNET_DRY_RUN.md` — exact manifest-driven launch validation
 - `sdk/README.md` — expected TypeScript SDK surface
 
 ## Current Verification
@@ -70,13 +74,22 @@ Out of scope for V1:
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
 - `LiteSVM` migration-flow suite currently covers `30` end-to-end cases
+- `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
 - `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
+- `./scripts/run-verified-build.sh` is the canonical deterministic-build lane
+- `./scripts/run-mainnet-dry-run.sh <filled-inputs.json>` is the canonical release-input validator
 
 Current toolchain note:
 
 - `cargo kani -p migrator-program --features no-entrypoint` can hit a late `goto-instrument` failure on this pinned environment even when the individual harnesses all verify successfully
 - use `./scripts/run-kani-lane.sh` as the release gate instead
+
+Verified-build lane policy:
+
+- the root `Cargo.toml` exposes the verifier toolchain via `[workspace.metadata.cli]`
+- `./scripts/run-verified-build.sh` requires a clean tracked git state by default
+- the script uses an absolute mount path to avoid the `solana-verify 0.4.11` `.` mount-path bug for workspace subcrates
 
 ## Mint Policy
 
@@ -91,3 +104,6 @@ For the final `new QX` Bags mint, run the pre-launch checklist in:
 For mainnet launch controls, follow:
 
 - `docs/runbooks/MAINNET_PRELAUNCH.md`
+- `docs/runbooks/MAINNET_DRY_RUN.md`
+- `docs/runbooks/VERIFIED_BUILD.md`
+- `docs/runbooks/UPGRADE_AUTHORITY_POLICY.md`

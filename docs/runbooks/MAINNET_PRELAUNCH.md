@@ -5,6 +5,7 @@
 Do not initialize mainnet config until all of the following are true:
 
 - final `new QX` mint exists
+- final `old QX` mint address is frozen and reviewed
 - final `new QX` mint passes the `Tokenkeg` checklist
 - reserve vault is funded
 - program id is fixed
@@ -35,18 +36,23 @@ Verify and publish these exact addresses:
 
 - `cargo test` passes on the pinned repo state
 - `npm run typecheck` passes in `sdk/`
+- `./scripts/run-sbf-assurance-lane.sh` passes on the pinned repo state
 - `./scripts/run-kani-lane.sh` passes on the pinned repo state
 - `./scripts/run-mollusk-lane.sh` passes on the pinned repo state
 - final mint verification script passes
+- old mint verification script passes
 - deployed config verification script passes
 - program authority verification script passes
 - reserve proof script passes with the approved eligible-supply input
+- dry-run validator proves the derived config PDA is absent before init
 - approved eligible-supply input exactly matches the `migration_cap` that will be initialized on-chain
 - config PDA and vault PDA re-derive correctly from the chosen program id
 - reserve vault owner is the vault PDA
 - reserve vault mint is the final `new QX` mint
 - reserve vault delegate and close-authority controls are cleared
 - deployed binary hash or exact build artifact path is recorded
+- verified-build metadata artifact is recorded
+- verified-build lane was run from a clean tracked git state
 
 ## Product Checks
 
@@ -68,6 +74,7 @@ Verify and publish these exact addresses:
 - the exact current upgrade authority address is recorded
 - the wallet allowed to call `initialize_config` is recorded
 - ops admin recorded in config matches the intended pause authority
+- reviewed dry-run manifest returns exit `0`
 
 ## Final Go/No-Go
 
@@ -79,5 +86,6 @@ Go only if:
 - pause authority is verified
 - upgrade authority state matches the published policy
 - reserve-proof artifact includes raw units, decimals, funding signature, and reviewer sign-off
+- verified-build artifact hash and reviewed dry-run manifest are attached to the release record
 
 If any of these fail, stop and keep migration closed.
