@@ -610,6 +610,14 @@ impl MigrationFlowFixture {
             .expect("token account should be updated");
     }
 
+    fn set_account_owner_program(&mut self, address: Address, owner: Address) {
+        let mut account = self.svm.get_account(&address).expect("account should exist");
+        account.owner = owner;
+        self.svm
+            .set_account(address, account)
+            .expect("account owner should be updated");
+    }
+
     fn set_mint_decimals(&mut self, mint: Address, decimals: u8) {
         let mut account = self
             .svm
@@ -627,6 +635,28 @@ impl MigrationFlowFixture {
             .get_account(&mint)
             .expect("mint account should exist");
         account.data[36..44].copy_from_slice(&supply.to_le_bytes());
+        self.svm
+            .set_account(mint, account)
+            .expect("mint account should be updated");
+    }
+
+    fn set_mint_authority_option(&mut self, mint: Address, mint_authority_option: u32) {
+        let mut account = self
+            .svm
+            .get_account(&mint)
+            .expect("mint account should exist");
+        account.data[0..4].copy_from_slice(&mint_authority_option.to_le_bytes());
+        self.svm
+            .set_account(mint, account)
+            .expect("mint account should be updated");
+    }
+
+    fn set_mint_freeze_authority_option(&mut self, mint: Address, freeze_authority_option: u32) {
+        let mut account = self
+            .svm
+            .get_account(&mint)
+            .expect("mint account should exist");
+        account.data[46..50].copy_from_slice(&freeze_authority_option.to_le_bytes());
         self.svm
             .set_account(mint, account)
             .expect("mint account should be updated");
@@ -784,6 +814,54 @@ fn initialize_config_rejects_mint_decimal_mismatch() {
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
         custom_error(MigrationError::InvalidConfig),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
+fn initialize_config_rejects_old_mint_with_mint_authority() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_mint_authority_option(fixture.old_qx_mint, 1);
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidOldMint),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
+fn initialize_config_rejects_new_mint_with_freeze_authority() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_mint_freeze_authority_option(fixture.new_qx_mint, 1);
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidNewMint),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
+fn initialize_config_rejects_old_mint_owned_by_wrong_program() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_account_owner_program(fixture.old_qx_mint, Address::new_unique());
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidOldMint),
     );
 
     assert_config_absent_or_uninitialized(&mut fixture);
@@ -1007,6 +1085,34 @@ fn initialize_config_rejects_reserve_vault_with_delegate_controls() {
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
         custom_error(MigrationError::InvalidTokenAccountControls),
+    );
+}
+
+#[test]
+fn initialize_config_rejects_reserve_vault_with_close_authority_controls() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_reserve_vault_controls(0, 0, 1);
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidTokenAccountControls),
+    );
+}
+
+#[test]
+fn initialize_config_rejects_reserve_vault_owned_by_wrong_program() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.set_account_owner_program(fixture.vault_new_qx, Address::new_unique());
+
+    assert_tx_error(
+        fixture.send_initialize_config_result(0, i64::MAX),
+        custom_error(MigrationError::InvalidTokenProgram),
     );
 }
 
@@ -1347,6 +1453,34 @@ fn migrate_exact_rejects_when_user_new_account_is_uninitialized() {
         ),
         custom_error(MigrationError::AccountNotInitialized),
     );
+}
+
+#[test]
+fn migrate_exact_rejects_when_user_new_account_owner_program_is_wrong() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+    fixture.set_account_owner_program(fixture.user_new_qx, Address::new_unique());
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_result(
+            MIGRATION_AMOUNT,
+            fixture.vault_new_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+        ),
+        custom_error(MigrationError::InvalidTokenProgram),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
 }
 
 #[test]

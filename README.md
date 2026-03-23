@@ -80,7 +80,7 @@ Out of scope for V1:
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
-- `LiteSVM` migration-flow suite currently covers `45` end-to-end cases
+- `LiteSVM` migration-flow suite currently covers `51` end-to-end cases
 - `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
 - `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, and fixture roundtrip replay
 - `./scripts/run-kani-lane.sh` passes for all `13` current proof harnesses
