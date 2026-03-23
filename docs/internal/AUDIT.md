@@ -42,10 +42,15 @@ Current verification coverage:
 - `LiteSVM` initialize_config same-mint rejection
 - `LiteSVM` initialize_config invalid token-program rejection
 - `LiteSVM` initialize_config reserve-vault control rejection
+- `LiteSVM` initialize_config reserve-vault close-authority rejection
+- `LiteSVM` initialize_config reserve-vault wrong-program-owner rejection
 - `LiteSVM` initialize_config zero migration-cap rejection
 - `LiteSVM` initialize_config migration-cap-above-reserve rejection
+- `LiteSVM` initialize_config old-mint wrong-program-owner rejection
+- `LiteSVM` initialize_config old-mint authority-flag rejection
+- `LiteSVM` initialize_config new-mint freeze-authority rejection
 - `LiteSVM` initialize_config first-deploy path using an uninitialized system-owned config PDA placeholder
-- `LiteSVM` migrate_exact happy path with real SPL mint/token account layouts
+- `LiteSVM` migrate_exact happy path with strict SPL-compatible mint/token account layouts
 - `LiteSVM` paused migration rejection
 - `LiteSVM` insufficient reserve rejection
 - `LiteSVM` migration-cap exceeded rejection
@@ -63,6 +68,7 @@ Current verification coverage:
 - `LiteSVM` wrong user source owner rejection
 - `LiteSVM` wrong user destination owner rejection
 - `LiteSVM` uninitialized user destination rejection
+- `LiteSVM` user destination wrong-program-owner rejection
 - `LiteSVM` wrong user destination mint rejection
 - `LiteSVM` user destination delegate-control rejection
 - `LiteSVM` user destination wrapped-native rejection
@@ -98,6 +104,7 @@ What is still missing before mainnet confidence:
 - finalized publication flow using the config/program-authority verification scripts
 - verified-build publication and public source linkage
 - second-provider replay of the reviewed mainnet dry-run manifest before release sign-off
+- a transaction lane that creates the relevant mint/token/ATA accounts through real SPL + ATA instructions instead of only synthetic fixture layouts
 - broader stateful fuzzing beyond the current `Mollusk` lane if the program surface grows
 - upstream `Kani` batch-run stability should be rechecked before restoring the single-command release gate
 
