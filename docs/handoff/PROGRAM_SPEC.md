@@ -269,7 +269,7 @@ Initial discriminator map:
 - `vault_new_qx` should be empty before `initialize_config`
 - `migration_cap` should equal the approved migration total for the open live-holder window
 - the refund destination for unclaimed funds is fixed in config; in V1 that is `funding_authority`
-- if any legacy balances are intentionally excluded, they must be operationally locked or removed before launch because V1 does not enforce wallet-level eligibility on-chain
+- if any legacy balances are intentionally excluded, they must be operationally locked or removed before launch; V1 does not enforce wallet-level eligibility on-chain
 - the final Bags mint must be verified as `Tokenkeg` before mainnet initialization
 - public docs must publish:
   - program id

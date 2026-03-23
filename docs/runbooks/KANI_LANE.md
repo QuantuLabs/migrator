@@ -1,6 +1,6 @@
 # Kani Lane
 
-## Why This Lane Exists
+## Lane Purpose
 
 `Kani` is still the right formal-check layer for this repo, but the batch command is not the most reliable way to run it on the current toolchain.
 
@@ -28,7 +28,7 @@ The lane verifies the current `#[kani::proof]` harnesses individually:
 - migration-window validation
 - unclaimed-withdrawal gate timing
 
-Because the harness list is explicit in the script, this lane is deterministic and easy to audit during release review.
+The harness list is explicit in the script, so this lane stays deterministic and easy to review during release.
 
 ## How To Run
 
@@ -40,7 +40,7 @@ From the repo root:
 
 This will iterate the approved harness list and stop at the first failure.
 
-## Why Not The Batch Command
+## Batch Command Status
 
 The direct batch command is still useful for ad hoc local checks:
 
@@ -48,4 +48,4 @@ The direct batch command is still useful for ad hoc local checks:
 cargo kani -p migrator --features no-entrypoint
 ```
 
-But it should not be treated as the release gate on the current pinned toolchain because of the late-stage `goto-instrument` instability described above.
+Do not treat it as the release gate on the current pinned toolchain; the late-stage `goto-instrument` instability remains.

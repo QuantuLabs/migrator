@@ -2,7 +2,7 @@
 
 ## Bottom Line
 
-The migration program can be safely implemented in `Pinocchio` if it remains intentionally small.
+Current program scope fits a narrow `Pinocchio` implementation.
 
 The biggest risks are not exotic Solana bugs. They are:
 
@@ -238,7 +238,7 @@ Risk:
 
 - V1 currently enforces `mint_authority == None` and `freeze_authority == None` on both old and new mints.
 
-Why this matters:
+Operational impact:
 
 - this is desirable for trust minimization
 - but if the final Bags-side mint setup differs, `initialize_config` and `migrate_exact` will reject it
@@ -261,7 +261,7 @@ Risk:
 - even a perfect migrator does not kill the old market by itself.
 - if legacy liquidity remains while circulating old supply gets burned away, the old market can become thinner and easier to manipulate
 - that can create a misleading legacy price increase and a fake market-cap signal during migration
-- if a team-controlled old LP remains live, that LP becomes an economic ingress into the V1 reserve because any freshly acquired `old QX` can still be burned `1:1`
+- if a team-controlled old LP remains live, that LP becomes an economic ingress into the V1 reserve; any freshly acquired `old QX` can still be burned `1:1`
 
 Mitigation:
 
@@ -281,7 +281,7 @@ Impact:
 
 - on-chain state remains smaller and simpler, but analytics are off-chain.
 
-Why this is acceptable:
+Current basis:
 
 - the burn itself is the anti-replay mechanism
 - wallet counts can be derived from logs and token transfers
@@ -313,13 +313,13 @@ Mitigation:
 
 ## Pinocchio-Specific Review
 
-`Pinocchio` is acceptable here because:
+Current `Pinocchio` fit:
 
 - the instruction set is tiny
 - account flows are explicit
 - local team patterns already exist
 
-`Pinocchio` requires discipline here:
+`Pinocchio` control points:
 
 - manual seed checks
 - manual token account parsing
@@ -349,7 +349,7 @@ Current `Kani` scope does not cover:
 - token CPI behavior
 - runtime Solana account ownership semantics
 
-Why this split is acceptable:
+Coverage split:
 
 - pure control policy is best handled with proofs
 - Solana account and CPI behavior is better covered here with `LiteSVM` transaction tests
@@ -360,7 +360,7 @@ Observed `Kani` caveat:
 
 Observed `Mollusk` caveat:
 
-- release confidence should come from `./scripts/run-mollusk-lane.sh`, not a bare `cargo test --test mollusk_fuzz_lane`, because the script rebuilds the SBF artifact first and avoids stale `target/deploy` binaries masking or reintroducing regressions
+- release confidence should come from `./scripts/run-mollusk-lane.sh`, not a bare `cargo test --test mollusk_fuzz_lane`; the script rebuilds the SBF artifact first and avoids stale `target/deploy` binaries masking or reintroducing regressions
 
 ## Pre-Launch Checklist
 
@@ -374,7 +374,7 @@ Observed `Mollusk` caveat:
 
 ## Recommendation
 
-Ship V1 as a narrow `Pinocchio` program with three instructions only.
+Ship V1 as a narrow `Pinocchio` program with four instructions only.
 
 Do not add:
 

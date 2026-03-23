@@ -1,10 +1,10 @@
 # Mollusk Lane
 
-## Why This Lane Exists
+## Lane Purpose
 
 This repository now ships a dedicated `Mollusk` regression and fuzz-fixture lane.
 
-It is the best fit for the current project because:
+Current fit:
 
 - the program is written in `Pinocchio`, not `Anchor`
 - the instruction surface is intentionally small

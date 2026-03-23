@@ -42,15 +42,6 @@ Out of scope for V1:
 - `Kani`
 - `solana-verify`
 
-## Why Pinocchio
-
-`Pinocchio` is the right default here because the program is intentionally
-small, the account validation needs to be explicit, and there is no hard
-requirement for Anchor IDLs if the client contract is frozen early.
-
-If the program grows into a larger admin or claim surface, switching to Anchor
-would become easier to justify.
-
 ## Repository Layout
 
 - `programs/migrator/` — on-chain program crate
@@ -90,7 +81,7 @@ Current coverage notes:
 - `Mollusk` lane covers `11` SBF-backed regression and fixture-replay cases
 - `Kani` lane covers `16` proof harnesses
 - SDK test suite covers `29` release and validator checks
-- `run-local-assurance-lane.sh` now requires a clean worktree by default because verified-build is part of the release-grade path
+- `run-local-assurance-lane.sh` requires a clean worktree by default; verified-build is part of the release-grade path
 
 Important toolchain note:
 

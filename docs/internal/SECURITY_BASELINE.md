@@ -35,7 +35,7 @@ External references checked on `2026-03-23`:
 
 Pinocchio does not remove the need for the controls above. It mainly reduces framework surface area and keeps the program closer to native Solana.
 
-That is a good fit here because the program has:
+Current program shape:
 
 - 4 instructions
 - a single persistent config account
@@ -80,8 +80,8 @@ Already aligned:
 - reserve-vault delegate and close-authority rejection
 - formal checks for gate logic, layout stability, overflow behavior, and unaligned roundtrips
 - negative-path transaction tests for wrong mint, wrong vault, bad destination owner, bad reserve controls, and malformed entrypoint data
-- the canonical `Kani` lane is now `./scripts/run-kani-lane.sh` because the batch command is unstable on the pinned toolchain
-- old-market deprecation is now treated as a release-control issue, not just a comms issue, because a live team-controlled old LP is an ingress path into the reserve
+- the canonical `Kani` lane is `./scripts/run-kani-lane.sh`; the batch command is unstable on the pinned toolchain
+- old-market deprecation is a release-control issue, not just a comms issue; a live team-controlled old LP remains an ingress path into the reserve
 
 Still missing or intentionally off-chain:
 

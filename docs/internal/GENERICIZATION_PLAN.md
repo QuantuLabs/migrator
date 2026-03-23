@@ -46,7 +46,7 @@ Recommended naming:
 - `refundRecipientNewQx` -> `refundRecipientDestinationAta`
 - `fundingNewQx` -> `fundingSourceToken`
 
-Why first:
+Phase priority:
 
 - no on-chain behavior change
 - no layout change
