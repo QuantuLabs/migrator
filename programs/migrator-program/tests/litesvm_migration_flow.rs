@@ -974,6 +974,29 @@ fn initialize_config_rejects_invalid_token_program_account() {
 }
 
 #[test]
+fn initialize_config_rejects_when_config_pda_is_reused_as_reserve_vault_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    assert_tx_error(
+        fixture.send_initialize_config_with_accounts_result(
+            0,
+            i64::MAX,
+            fixture.vault_authority_pda,
+            fixture.config_pda,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+            fixture.program_data,
+        ),
+        custom_error(MigrationError::InvalidTokenProgram),
+    );
+
+    assert_config_absent_or_uninitialized(&mut fixture);
+}
+
+#[test]
 fn initialize_config_rejects_reserve_vault_with_delegate_controls() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -1347,6 +1370,63 @@ fn migrate_exact_rejects_when_user_new_account_mint_mismatches_config() {
 }
 
 #[test]
+fn migrate_exact_rejects_when_user_old_and_user_new_accounts_alias() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_with_accounts_result(
+            MIGRATION_AMOUNT,
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            fixture.user_old_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+        ),
+        custom_error(MigrationError::InvalidConfig),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
+fn migrate_exact_rejects_when_config_pda_is_reused_as_reserve_vault_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_result(
+            MIGRATION_AMOUNT,
+            fixture.config_pda,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+        ),
+        custom_error(MigrationError::InvalidVault),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
 fn migrate_exact_rejects_when_user_new_account_has_delegate_controls() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
@@ -1473,6 +1553,38 @@ fn migrate_exact_rejects_when_destination_aliases_reserve_vault() {
     );
 
     assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.config().total_migrated, total_before);
+}
+
+#[test]
+fn migrate_exact_rejects_when_destination_aliases_user_old_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+
+    let old_before = fixture.token_balance(&fixture.user_old_qx);
+    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_migrate_exact_with_accounts_result(
+            MIGRATION_AMOUNT,
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            fixture.user_old_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+        ),
+        custom_error(MigrationError::InvalidConfig),
+    );
+
+    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
     assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
