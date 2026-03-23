@@ -94,7 +94,7 @@ Use these to confirm:
 - the reserve vault owner equals the migrator vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
 - the deployed config account matches the published address set exactly
-- the deployed config `migration_cap` matches the approved eligible raw-unit total exactly
+- the deployed config `migration_cap` matches the approved migration raw-unit total exactly
 - the current `ProgramData` authority matches the published upgrade-authority policy
 - the reserve proof artifact is generated from reproducible RPC inputs
 - all scripts exit nonzero on any mismatch
@@ -103,7 +103,7 @@ Use these to confirm:
 
 Before mainnet init, record and publish an internal proof bundle containing:
 
-- exact `old QX` eligible supply input used for the migration math
+- exact migration-cap input used for the migration math
 - exact `new QX` reserve balance in raw base units
 - mint decimals used in the comparison
 - RPC endpoint and commitment used for the reads

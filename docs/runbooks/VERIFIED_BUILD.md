@@ -93,4 +93,4 @@ gate before exporting or publishing any verification PDA transaction.
 - record the exact git commit, library name, arch, and executable hash
 - if the hash changes, treat it as a new release candidate
 - do not rely on `cargo build-sbf` output for public hash publication
-- do not publish build metadata produced from a dirty tracked worktree
+- do not publish build metadata produced from a dirty git worktree

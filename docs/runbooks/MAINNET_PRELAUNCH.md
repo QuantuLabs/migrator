@@ -44,9 +44,9 @@ Verify and publish these exact addresses:
 - old mint verification script passes
 - deployed config verification script passes
 - program authority verification script passes
-- reserve proof script passes with the approved eligible-supply input
+- reserve proof script passes with the approved migration-cap input
 - dry-run validator proves the derived config PDA is absent before init
-- approved eligible-supply input exactly matches the `migration_cap` that will be initialized on-chain
+- approved migration-cap input exactly matches the `migration_cap` that will be initialized on-chain
 - reviewed dry-run manifest is re-run against at least one second independent mainnet RPC before sign-off
 - config PDA and vault PDA re-derive correctly from the chosen program id
 - reserve vault owner is the vault PDA
