@@ -33,8 +33,8 @@ use spl_token_interface::state::{Account as TokenAccount, AccountState, Mint};
 
 const OLD_MINT_BYTES: [u8; 32] = [41u8; 32];
 const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
-const VAULT_NEW_QX_BYTES: [u8; 32] = [43u8; 32];
-const USER_OLD_QX_BYTES: [u8; 32] = [44u8; 32];
+const RESERVE_VAULT_BYTES: [u8; 32] = [43u8; 32];
+const USER_SOURCE_TOKEN_BYTES: [u8; 32] = [44u8; 32];
 
 const INITIAL_USER_OLD_BALANCE: u64 = 250;
 const INITIAL_USER_NEW_BALANCE: u64 = 0;
@@ -244,13 +244,13 @@ struct FixtureAccounts {
     config_pda: Pubkey,
     vault_authority_pda: Pubkey,
     program_data: Pubkey,
-    old_qx_mint: Pubkey,
-    new_qx_mint: Pubkey,
-    funding_new_qx: Pubkey,
-    vault_new_qx: Pubkey,
-    refund_recipient_new_qx: Pubkey,
-    user_old_qx: Pubkey,
-    user_new_qx: Pubkey,
+    source_mint: Pubkey,
+    destination_mint: Pubkey,
+    funding_token_account: Pubkey,
+    reserve_vault: Pubkey,
+    refund_recipient_token_account: Pubkey,
+    user_source_tokens: Pubkey,
+    user_destination_tokens: Pubkey,
     system_program: Pubkey,
 }
 
@@ -279,12 +279,12 @@ impl FixtureAccounts {
                 AccountMeta::new(self.initializer, true),
                 AccountMeta::new_readonly(self.ops_admin, true),
                 AccountMeta::new_readonly(self.funding_authority, true),
-                AccountMeta::new(self.funding_new_qx, false),
+                AccountMeta::new(self.funding_token_account, false),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(self.vault_authority_pda, false),
-                AccountMeta::new(self.vault_new_qx, false),
-                AccountMeta::new_readonly(self.old_qx_mint, false),
-                AccountMeta::new_readonly(self.new_qx_mint, false),
+                AccountMeta::new(self.reserve_vault, false),
+                AccountMeta::new_readonly(self.source_mint, false),
+                AccountMeta::new_readonly(self.destination_mint, false),
                 AccountMeta::new_readonly(Pubkey::new_from_array(TOKEN_PROGRAM_ID), false),
                 AccountMeta::new_readonly(self.system_program, false),
                 AccountMeta::new_readonly(self.program_data, false),
@@ -314,11 +314,11 @@ impl FixtureAccounts {
                 AccountMeta::new_readonly(self.user, true),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(self.vault_authority_pda, false),
-                AccountMeta::new(self.vault_new_qx, false),
-                AccountMeta::new(self.user_old_qx, false),
-                AccountMeta::new(self.user_new_qx, false),
-                AccountMeta::new(self.old_qx_mint, false),
-                AccountMeta::new_readonly(self.new_qx_mint, false),
+                AccountMeta::new(self.reserve_vault, false),
+                AccountMeta::new(self.user_source_tokens, false),
+                AccountMeta::new(self.user_destination_tokens, false),
+                AccountMeta::new(self.source_mint, false),
+                AccountMeta::new_readonly(self.destination_mint, false),
                 AccountMeta::new_readonly(Pubkey::new_from_array(TOKEN_PROGRAM_ID), false),
             ],
         )
@@ -331,9 +331,9 @@ impl FixtureAccounts {
             vec![
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(self.vault_authority_pda, false),
-                AccountMeta::new(self.vault_new_qx, false),
-                AccountMeta::new(self.refund_recipient_new_qx, false),
-                AccountMeta::new_readonly(self.new_qx_mint, false),
+                AccountMeta::new(self.reserve_vault, false),
+                AccountMeta::new(self.refund_recipient_token_account, false),
+                AccountMeta::new_readonly(self.destination_mint, false),
                 AccountMeta::new_readonly(Pubkey::new_from_array(TOKEN_PROGRAM_ID), false),
             ],
         )
@@ -353,13 +353,13 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
         Pubkey::find_program_address(&[VAULT_AUTHORITY_SEED], &program_id);
     let (program_data, _) = Pubkey::find_program_address(&[program_id.as_ref()], &loader_program);
 
-    let old_qx_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
-    let new_qx_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
-    let funding_new_qx = Pubkey::new_unique();
-    let vault_new_qx = Pubkey::new_from_array(VAULT_NEW_QX_BYTES);
-    let refund_recipient_new_qx = associated_token_address(&funding_authority, &new_qx_mint);
-    let user_old_qx = Pubkey::new_from_array(USER_OLD_QX_BYTES);
-    let user_new_qx = associated_token_address(&user, &new_qx_mint);
+    let source_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
+    let destination_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
+    let funding_token_account = Pubkey::new_unique();
+    let reserve_vault = Pubkey::new_from_array(RESERVE_VAULT_BYTES);
+    let refund_recipient_token_account = associated_token_address(&funding_authority, &destination_mint);
+    let user_source_tokens = Pubkey::new_from_array(USER_SOURCE_TOKEN_BYTES);
+    let user_destination_tokens = associated_token_address(&user, &destination_mint);
     let (system_program, system_program_account) = keyed_account_for_system_program();
     let (loader_v2_program, loader_v2_program_account) = keyed_account_for_bpf_loader_v2_program();
     let (loader_v3_program, loader_v3_program_account) = keyed_account_for_bpf_loader_v3_program();
@@ -389,7 +389,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
             },
         ),
         (
-            old_qx_mint,
+            source_mint,
             Account {
                 lamports: 1_000_000,
                 data: make_mint_data(INITIAL_USER_OLD_BALANCE, 9),
@@ -399,7 +399,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
             },
         ),
         (
-            new_qx_mint,
+            destination_mint,
             Account {
                 lamports: 1_000_000,
                 data: make_mint_data(INITIAL_RESERVE, 9),
@@ -409,50 +409,50 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
             },
         ),
         (
-            vault_new_qx,
+            reserve_vault,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &vault_authority_pda, 0),
+                data: make_token_account_data(&destination_mint, &vault_authority_pda, 0),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
             },
         ),
         (
-            funding_new_qx,
+            funding_token_account,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &funding_authority, INITIAL_RESERVE),
+                data: make_token_account_data(&destination_mint, &funding_authority, INITIAL_RESERVE),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
             },
         ),
         (
-            refund_recipient_new_qx,
+            refund_recipient_token_account,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &funding_authority, 0),
+                data: make_token_account_data(&destination_mint, &funding_authority, 0),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
             },
         ),
         (
-            user_old_qx,
+            user_source_tokens,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&old_qx_mint, &user, INITIAL_USER_OLD_BALANCE),
+                data: make_token_account_data(&source_mint, &user, INITIAL_USER_OLD_BALANCE),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
             },
         ),
         (
-            user_new_qx,
+            user_destination_tokens,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &user, INITIAL_USER_NEW_BALANCE),
+                data: make_token_account_data(&destination_mint, &user, INITIAL_USER_NEW_BALANCE),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
@@ -478,13 +478,13 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
         config_pda,
         vault_authority_pda,
         program_data,
-        old_qx_mint,
-        new_qx_mint,
-        funding_new_qx,
-        vault_new_qx,
-        refund_recipient_new_qx,
-        user_old_qx,
-        user_new_qx,
+        source_mint,
+        destination_mint,
+        funding_token_account,
+        reserve_vault,
+        refund_recipient_token_account,
+        user_source_tokens,
+        user_destination_tokens,
         system_program,
     }
 }
@@ -503,13 +503,13 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
         Pubkey::find_program_address(&[VAULT_AUTHORITY_SEED], &program_id);
     let (program_data, _) = Pubkey::find_program_address(&[program_id.as_ref()], &loader_program);
 
-    let old_qx_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
-    let new_qx_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
-    let funding_new_qx = Pubkey::new_unique();
-    let vault_new_qx = Pubkey::new_from_array(VAULT_NEW_QX_BYTES);
-    let refund_recipient_new_qx = associated_token_address(&funding_authority, &new_qx_mint);
-    let user_old_qx = Pubkey::new_from_array(USER_OLD_QX_BYTES);
-    let user_new_qx = associated_token_address(&user, &new_qx_mint);
+    let source_mint = Pubkey::new_from_array(OLD_MINT_BYTES);
+    let destination_mint = Pubkey::new_from_array(NEW_MINT_BYTES);
+    let funding_token_account = Pubkey::new_unique();
+    let reserve_vault = Pubkey::new_from_array(RESERVE_VAULT_BYTES);
+    let refund_recipient_token_account = associated_token_address(&funding_authority, &destination_mint);
+    let user_source_tokens = Pubkey::new_from_array(USER_SOURCE_TOKEN_BYTES);
+    let user_destination_tokens = associated_token_address(&user, &destination_mint);
     let (system_program, system_program_account) = keyed_account_for_system_program();
     let (loader_v2_program, loader_v2_program_account) = keyed_account_for_bpf_loader_v2_program();
     let (loader_v3_program, loader_v3_program_account) = keyed_account_for_bpf_loader_v3_program();
@@ -539,7 +539,7 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
             },
         ),
         (
-            old_qx_mint,
+            source_mint,
             Account::new(
                 Rent::default().minimum_balance(Mint::LEN),
                 Mint::LEN,
@@ -547,7 +547,7 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
             ),
         ),
         (
-            new_qx_mint,
+            destination_mint,
             Account::new(
                 Rent::default().minimum_balance(Mint::LEN),
                 Mint::LEN,
@@ -555,7 +555,7 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
             ),
         ),
         (
-            vault_new_qx,
+            reserve_vault,
             Account::new(
                 Rent::default().minimum_balance(TokenAccount::LEN),
                 TokenAccount::LEN,
@@ -563,23 +563,23 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
             ),
         ),
         (
-            funding_new_qx,
+            funding_token_account,
             Account::new(
                 Rent::default().minimum_balance(TokenAccount::LEN),
                 TokenAccount::LEN,
                 &token_program,
             ),
         ),
-        (refund_recipient_new_qx, Account::default()),
+        (refund_recipient_token_account, Account::default()),
         (
-            user_old_qx,
+            user_source_tokens,
             Account::new(
                 Rent::default().minimum_balance(TokenAccount::LEN),
                 TokenAccount::LEN,
                 &token_program,
             ),
         ),
-        (user_new_qx, Account::default()),
+        (user_destination_tokens, Account::default()),
         (
             token_program,
             create_program_account_loader_v2(TOKENKEG_ELF),
@@ -601,13 +601,13 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
         config_pda,
         vault_authority_pda,
         program_data,
-        old_qx_mint,
-        new_qx_mint,
-        funding_new_qx,
-        vault_new_qx,
-        refund_recipient_new_qx,
-        user_old_qx,
-        user_new_qx,
+        source_mint,
+        destination_mint,
+        funding_token_account,
+        reserve_vault,
+        refund_recipient_token_account,
+        user_source_tokens,
+        user_destination_tokens,
         system_program,
     }
 }
@@ -641,13 +641,13 @@ fn mollusk_initialize_config_binds_expected_state_and_cap() {
     assert_eq!(config.discriminator, MigrationConfig::DISCRIMINATOR);
     assert_eq!(config.version, MigrationConfig::VERSION);
     assert_eq!(config.admin, *fixture.ops_admin.as_array());
-    assert_eq!(config.old_qx_mint, *fixture.old_qx_mint.as_array());
-    assert_eq!(config.new_qx_mint, *fixture.new_qx_mint.as_array());
+    assert_eq!(config.source_mint, *fixture.source_mint.as_array());
+    assert_eq!(config.destination_mint, *fixture.destination_mint.as_array());
     assert_eq!(
         config.vault_authority,
         *fixture.vault_authority_pda.as_array()
     );
-    assert_eq!(config.vault_new_qx, *fixture.vault_new_qx.as_array());
+    assert_eq!(config.reserve_vault, *fixture.reserve_vault.as_array());
     assert_eq!(config.total_migrated, 0);
     assert_eq!(config.migration_cap(), MIGRATION_CAP);
     assert_eq!(
@@ -659,14 +659,14 @@ fn mollusk_initialize_config_binds_expected_state_and_cap() {
     assert_eq!(
         token_amount(account_by_key(
             &result.resulting_accounts,
-            &fixture.funding_new_qx
+            &fixture.funding_token_account
         )),
         0
     );
     assert_eq!(
         token_amount(account_by_key(
             &result.resulting_accounts,
-            &fixture.vault_new_qx
+            &fixture.reserve_vault
         )),
         MIGRATION_CAP
     );
@@ -718,15 +718,15 @@ fn mollusk_pause_then_migrate_stops_before_any_token_cpi() {
 
     let old_before = token_amount(account_by_key(
         &pause_result.resulting_accounts,
-        &fixture.user_old_qx,
+        &fixture.user_source_tokens,
     ));
     let new_before = token_amount(account_by_key(
         &pause_result.resulting_accounts,
-        &fixture.user_new_qx,
+        &fixture.user_destination_tokens,
     ));
     let reserve_before = token_amount(account_by_key(
         &pause_result.resulting_accounts,
-        &fixture.vault_new_qx,
+        &fixture.reserve_vault,
     ));
 
     let migrate_result = mollusk.process_and_validate_instruction(
@@ -745,21 +745,21 @@ fn mollusk_pause_then_migrate_stops_before_any_token_cpi() {
     assert_eq!(
         token_amount(account_by_key(
             &migrate_result.resulting_accounts,
-            &fixture.user_old_qx
+            &fixture.user_source_tokens
         )),
         old_before
     );
     assert_eq!(
         token_amount(account_by_key(
             &migrate_result.resulting_accounts,
-            &fixture.user_new_qx
+            &fixture.user_destination_tokens
         )),
         new_before
     );
     assert_eq!(
         token_amount(account_by_key(
             &migrate_result.resulting_accounts,
-            &fixture.vault_new_qx
+            &fixture.reserve_vault
         )),
         reserve_before
     );
@@ -782,15 +782,15 @@ fn mollusk_migrate_exact_executes_burn_and_transfer_cpis() {
 
     let old_before = token_amount(account_by_key(
         &init_result.resulting_accounts,
-        &fixture.user_old_qx,
+        &fixture.user_source_tokens,
     ));
     let new_before = token_amount(account_by_key(
         &init_result.resulting_accounts,
-        &fixture.user_new_qx,
+        &fixture.user_destination_tokens,
     ));
     let reserve_before = token_amount(account_by_key(
         &init_result.resulting_accounts,
-        &fixture.vault_new_qx,
+        &fixture.reserve_vault,
     ));
 
     let migrate_result = mollusk.process_and_validate_instruction(
@@ -813,21 +813,21 @@ fn mollusk_migrate_exact_executes_burn_and_transfer_cpis() {
     assert_eq!(
         token_amount(account_by_key(
             &migrate_result.resulting_accounts,
-            &fixture.user_old_qx
+            &fixture.user_source_tokens
         )),
         old_before - MIGRATION_AMOUNT
     );
     assert_eq!(
         token_amount(account_by_key(
             &migrate_result.resulting_accounts,
-            &fixture.user_new_qx
+            &fixture.user_destination_tokens
         )),
         new_before + MIGRATION_AMOUNT
     );
     assert_eq!(
         token_amount(account_by_key(
             &migrate_result.resulting_accounts,
-            &fixture.vault_new_qx
+            &fixture.reserve_vault
         )),
         reserve_before - MIGRATION_AMOUNT
     );
@@ -849,7 +849,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &initialize_mint2(
             &token_program,
-            &fixture.old_qx_mint,
+            &fixture.source_mint,
             &fixture.initializer,
             None,
             9,
@@ -862,7 +862,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &initialize_mint2(
             &token_program,
-            &fixture.new_qx_mint,
+            &fixture.destination_mint,
             &fixture.initializer,
             None,
             9,
@@ -875,8 +875,8 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &initialize_account3(
             &token_program,
-            &fixture.funding_new_qx,
-            &fixture.new_qx_mint,
+            &fixture.funding_token_account,
+            &fixture.destination_mint,
             &fixture.funding_authority,
         )
         .expect("initialize funding account instruction"),
@@ -887,8 +887,8 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &initialize_account3(
             &token_program,
-            &fixture.vault_new_qx,
-            &fixture.new_qx_mint,
+            &fixture.reserve_vault,
+            &fixture.destination_mint,
             &fixture.vault_authority_pda,
         )
         .expect("initialize reserve vault instruction"),
@@ -899,8 +899,8 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &initialize_account3(
             &token_program,
-            &fixture.user_old_qx,
-            &fixture.old_qx_mint,
+            &fixture.user_source_tokens,
+            &fixture.source_mint,
             &fixture.user,
         )
         .expect("initialize user old account instruction"),
@@ -912,7 +912,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &create_associated_token_account_instruction(
             &fixture.initializer,
             &fixture.user,
-            &fixture.new_qx_mint,
+            &fixture.destination_mint,
             &token_program,
         ),
         &accounts,
@@ -922,8 +922,8 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &mint_to(
             &token_program,
-            &fixture.old_qx_mint,
-            &fixture.user_old_qx,
+            &fixture.source_mint,
+            &fixture.user_source_tokens,
             &fixture.initializer,
             &[],
             INITIAL_USER_OLD_BALANCE,
@@ -936,8 +936,8 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &mint_to(
             &token_program,
-            &fixture.new_qx_mint,
-            &fixture.funding_new_qx,
+            &fixture.destination_mint,
+            &fixture.funding_token_account,
             &fixture.initializer,
             &[],
             INITIAL_RESERVE,
@@ -950,7 +950,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &set_authority(
             &token_program,
-            &fixture.old_qx_mint,
+            &fixture.source_mint,
             None,
             AuthorityType::MintTokens,
             &fixture.initializer,
@@ -964,7 +964,7 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
         &mollusk,
         &set_authority(
             &token_program,
-            &fixture.new_qx_mint,
+            &fixture.destination_mint,
             None,
             AuthorityType::MintTokens,
             &fixture.initializer,
@@ -994,15 +994,15 @@ fn mollusk_real_spl_and_ata_bootstrap_then_migrate_exact() {
 
     let old_balance_after = token_amount(account_by_key(
         &migrate_result.resulting_accounts,
-        &fixture.user_old_qx,
+        &fixture.user_source_tokens,
     ));
     let new_balance_after = token_amount(account_by_key(
         &migrate_result.resulting_accounts,
-        &fixture.user_new_qx,
+        &fixture.user_destination_tokens,
     ));
     let reserve_balance_after = token_amount(account_by_key(
         &migrate_result.resulting_accounts,
-        &fixture.vault_new_qx,
+        &fixture.reserve_vault,
     ));
 
     assert_eq!(
@@ -1037,10 +1037,10 @@ fn mollusk_withdraw_unclaimed_executes_closeout_transfer_and_sets_flag() {
     let mut expired_accounts = migrate_accounts;
     set_config_window_in_accounts(&mut expired_accounts, &fixture.config_pda, -1, -1);
 
-    let reserve_before = token_amount(account_by_key(&expired_accounts, &fixture.vault_new_qx));
+    let reserve_before = token_amount(account_by_key(&expired_accounts, &fixture.reserve_vault));
     let refund_before = token_amount(account_by_key(
         &expired_accounts,
-        &fixture.refund_recipient_new_qx,
+        &fixture.refund_recipient_token_account,
     ));
     let unclaimed_amount = MIGRATION_CAP - MIGRATION_AMOUNT;
 
@@ -1051,13 +1051,13 @@ fn mollusk_withdraw_unclaimed_executes_closeout_transfer_and_sets_flag() {
         &[Check::success()],
     );
     assert_eq!(
-        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        token_amount(account_by_key(&closeout_accounts, &fixture.reserve_vault)),
         reserve_before - unclaimed_amount
     );
     assert_eq!(
         token_amount(account_by_key(
             &closeout_accounts,
-            &fixture.refund_recipient_new_qx
+            &fixture.refund_recipient_token_account
         )),
         refund_before + unclaimed_amount
     );
@@ -1082,10 +1082,10 @@ fn mollusk_withdraw_unclaimed_rejects_at_deadline_without_mutation() {
         &[Check::success()],
     );
 
-    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.vault_new_qx));
+    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.reserve_vault));
     let refund_before = token_amount(account_by_key(
         &init_accounts,
-        &fixture.refund_recipient_new_qx,
+        &fixture.refund_recipient_token_account,
     ));
 
     let closeout_accounts = process_instruction(
@@ -1098,13 +1098,13 @@ fn mollusk_withdraw_unclaimed_rejects_at_deadline_without_mutation() {
     );
 
     assert_eq!(
-        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        token_amount(account_by_key(&closeout_accounts, &fixture.reserve_vault)),
         reserve_before
     );
     assert_eq!(
         token_amount(account_by_key(
             &closeout_accounts,
-            &fixture.refund_recipient_new_qx
+            &fixture.refund_recipient_token_account
         )),
         refund_before
     );
@@ -1144,10 +1144,10 @@ fn mollusk_withdraw_unclaimed_rejects_when_paused_after_expiry() {
     let mut expired_accounts = paused_accounts;
     set_config_window_in_accounts(&mut expired_accounts, &fixture.config_pda, -1, -1);
 
-    let reserve_before = token_amount(account_by_key(&expired_accounts, &fixture.vault_new_qx));
+    let reserve_before = token_amount(account_by_key(&expired_accounts, &fixture.reserve_vault));
     let refund_before = token_amount(account_by_key(
         &expired_accounts,
-        &fixture.refund_recipient_new_qx,
+        &fixture.refund_recipient_token_account,
     ));
 
     let closeout_accounts = process_instruction(
@@ -1158,13 +1158,13 @@ fn mollusk_withdraw_unclaimed_rejects_when_paused_after_expiry() {
     );
 
     assert_eq!(
-        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        token_amount(account_by_key(&closeout_accounts, &fixture.reserve_vault)),
         reserve_before
     );
     assert_eq!(
         token_amount(account_by_key(
             &closeout_accounts,
-            &fixture.refund_recipient_new_qx
+            &fixture.refund_recipient_token_account
         )),
         refund_before
     );
@@ -1190,10 +1190,10 @@ fn mollusk_withdraw_unclaimed_rejects_wrong_token_program() {
         &[Check::success()],
     );
 
-    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.vault_new_qx));
+    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.reserve_vault));
     let refund_before = token_amount(account_by_key(
         &init_accounts,
-        &fixture.refund_recipient_new_qx,
+        &fixture.refund_recipient_token_account,
     ));
 
     let mut ix = fixture.withdraw_unclaimed_ix();
@@ -1209,13 +1209,13 @@ fn mollusk_withdraw_unclaimed_rejects_wrong_token_program() {
     );
 
     assert_eq!(
-        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        token_amount(account_by_key(&closeout_accounts, &fixture.reserve_vault)),
         reserve_before
     );
     assert_eq!(
         token_amount(account_by_key(
             &closeout_accounts,
-            &fixture.refund_recipient_new_qx
+            &fixture.refund_recipient_token_account
         )),
         refund_before
     );
@@ -1241,17 +1241,17 @@ fn mollusk_withdraw_unclaimed_rejects_refund_ata_delegate_controls() {
     );
     set_token_account_controls_in_accounts(
         &mut init_accounts,
-        &fixture.refund_recipient_new_qx,
+        &fixture.refund_recipient_token_account,
         1,
         1,
         0,
         0,
     );
 
-    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.vault_new_qx));
+    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.reserve_vault));
     let refund_before = token_amount(account_by_key(
         &init_accounts,
-        &fixture.refund_recipient_new_qx,
+        &fixture.refund_recipient_token_account,
     ));
 
     let closeout_accounts = process_instruction(
@@ -1264,13 +1264,13 @@ fn mollusk_withdraw_unclaimed_rejects_refund_ata_delegate_controls() {
     );
 
     assert_eq!(
-        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        token_amount(account_by_key(&closeout_accounts, &fixture.reserve_vault)),
         reserve_before
     );
     assert_eq!(
         token_amount(account_by_key(
             &closeout_accounts,
-            &fixture.refund_recipient_new_qx
+            &fixture.refund_recipient_token_account
         )),
         refund_before
     );

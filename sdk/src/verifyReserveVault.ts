@@ -126,7 +126,7 @@ export async function main() {
 
   if (!programIdArg || !newMintArg || !reserveVaultArg) {
     throw new Error(
-      "Usage: node src/verifyReserveVault.ts <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>",
+      "Usage: node src/verifyReserveVault.ts <PROGRAM_ID> <DESTINATION_MINT> <RESERVE_VAULT>",
     );
   }
 

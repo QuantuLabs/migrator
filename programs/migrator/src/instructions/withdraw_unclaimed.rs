@@ -21,9 +21,9 @@ use super::{
 // Accounts:
 // 0. [writable] config PDA
 // 1. [] vault authority PDA
-// 2. [writable] vault new QX token account
-// 3. [writable] refund recipient new QX ATA
-// 4. [] new QX mint
+// 2. [writable] vault destination token token account
+// 3. [writable] refund recipient destination token ATA
+// 4. [] destination token mint
 // 5. [] token program
 // Data: none
 pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> ProgramResult {
@@ -31,7 +31,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         return Err(ProgramError::InvalidInstructionData);
     }
 
-    let [config_account, vault_authority, vault_new_qx, refund_recipient_new_qx, new_qx_mint, token_program, ..] =
+    let [config_account, vault_authority, reserve_vault, refund_recipient_token_account, destination_mint, token_program, ..] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -55,26 +55,26 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     if config.vault_authority != *vault_authority.address().as_array() {
         return Err(MigrationError::InvalidVaultAuthority.into());
     }
-    if config.vault_new_qx != *vault_new_qx.address().as_array() {
+    if config.reserve_vault != *reserve_vault.address().as_array() {
         return Err(MigrationError::InvalidVault.into());
     }
-    if config.new_qx_mint != *new_qx_mint.address().as_array() {
+    if config.destination_mint != *destination_mint.address().as_array() {
         return Err(MigrationError::InvalidNewMint.into());
     }
 
     validate_token_program(token_program)?;
-    let _ = validate_new_mint_account(new_qx_mint, &config.new_qx_mint)?;
+    let _ = validate_new_mint_account(destination_mint, &config.destination_mint)?;
 
     let refund_recipient = Address::new_from_array(config.refund_recipient());
 
     let closeout_amount = unsafe {
-        validate_custody_token_account(vault_new_qx, &config.new_qx_mint, &config.vault_authority)?;
+        validate_custody_token_account(reserve_vault, &config.destination_mint, &config.vault_authority)?;
         validate_destination_token_account(
-            refund_recipient_new_qx,
+            refund_recipient_token_account,
             &refund_recipient,
-            &config.new_qx_mint,
+            &config.destination_mint,
         )?;
-        token_amount(vault_new_qx)?
+        token_amount(reserve_vault)?
     };
     if closeout_amount == 0 {
         return Err(MigrationError::InsufficientVaultLiquidity.into());
@@ -88,8 +88,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     let vault_signer = Signer::from(&vault_seeds);
 
     Transfer {
-        from: vault_new_qx,
-        to: refund_recipient_new_qx,
+        from: reserve_vault,
+        to: refund_recipient_token_account,
         authority: vault_authority,
         amount: closeout_amount,
     }

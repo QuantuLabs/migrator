@@ -50,8 +50,8 @@ export type MainnetInputs = {
   secondaryRpcUrls?: string[];
   expectConfigInitialized: boolean;
   programId: string;
-  oldQxMint: string;
-  newQxMint: string;
+  sourceMint: string;
+  destinationMint: string;
   reserveVault: string;
   opsAdmin: string;
   initializerAuthority: string;
@@ -138,8 +138,8 @@ export function parseInputs(raw: unknown): MainnetInputs {
       "expectConfigInitialized",
     ),
     programId: asString(record.programId, "programId"),
-    oldQxMint: asString(record.oldQxMint, "oldQxMint"),
-    newQxMint: asString(record.newQxMint, "newQxMint"),
+    sourceMint: asString(record.sourceMint, "sourceMint"),
+    destinationMint: asString(record.destinationMint, "destinationMint"),
     reserveVault: asString(record.reserveVault, "reserveVault"),
     opsAdmin: asString(record.opsAdmin, "opsAdmin"),
     initializerAuthority: asString(record.initializerAuthority, "initializerAuthority"),
@@ -235,8 +235,8 @@ type MainnetChecksContext = {
   executableHash: string;
   reviewedBuildInfo: ReturnType<typeof readReviewedBuildInfo>;
   resolvedProgramSoPath: string;
-  oldQxMint: PublicKey;
-  newQxMint: PublicKey;
+  sourceMint: PublicKey;
+  destinationMint: PublicKey;
   reserveVault: PublicKey;
   opsAdmin: PublicKey;
   initializerAuthority: PublicKey;
@@ -300,11 +300,11 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
     oldMintAuthorityDisabled: ctx.parsedOldMint.mintAuthorityOption === 0,
     oldFreezeAuthorityDisabled: ctx.parsedOldMint.freezeAuthorityOption === 0,
     oldMintDecimalsMatchExpected: ctx.parsedOldMint.decimals === ctx.inputs.expectedDecimals,
-    oldMintIsNotNativeMint: ctx.oldQxMint.toBase58() !== NATIVE_MINT_BASE58,
-    oldMintDiffersFromNewMint: ctx.oldQxMint.toBase58() !== ctx.newQxMint.toBase58(),
-    newMintIsNotNativeMint: ctx.newQxMint.toBase58() !== NATIVE_MINT_BASE58,
+    oldMintIsNotNativeMint: ctx.sourceMint.toBase58() !== NATIVE_MINT_BASE58,
+    oldMintDiffersFromNewMint: ctx.sourceMint.toBase58() !== ctx.destinationMint.toBase58(),
+    newMintIsNotNativeMint: ctx.destinationMint.toBase58() !== NATIVE_MINT_BASE58,
     reserveOwnedByTokenkeg: ctx.reserveInfo.owner.equals(TOKEN_PROGRAM_ID),
-    reserveMintMatchesNewMint: ctx.parsedReserve.mint === ctx.newQxMint.toBase58(),
+    reserveMintMatchesNewMint: ctx.parsedReserve.mint === ctx.destinationMint.toBase58(),
     reserveOwnerMatchesVaultAuthority:
       ctx.parsedReserve.owner === ctx.vaultAuthorityPda.toBase58(),
     reserveInitialized: ctx.parsedReserve.state === 1,
@@ -353,15 +353,15 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
         : null,
     configOldMintMatches:
       ctx.inputs.expectConfigInitialized && ctx.parsedConfig
-        ? ctx.parsedConfig.oldQxMint.equals(ctx.oldQxMint)
+        ? ctx.parsedConfig.sourceMint.equals(ctx.sourceMint)
         : null,
     configNewMintMatches:
       ctx.inputs.expectConfigInitialized && ctx.parsedConfig
-        ? ctx.parsedConfig.newQxMint.equals(ctx.newQxMint)
+        ? ctx.parsedConfig.destinationMint.equals(ctx.destinationMint)
         : null,
     configReserveVaultMatches:
       ctx.inputs.expectConfigInitialized && ctx.parsedConfig
-        ? ctx.parsedConfig.vaultNewQx.equals(ctx.reserveVault)
+        ? ctx.parsedConfig.reserveVault.equals(ctx.reserveVault)
         : null,
     configAdminMatches:
       ctx.inputs.expectConfigInitialized && ctx.parsedConfig
@@ -450,8 +450,8 @@ export async function validateMainnetInputsReport(params: {
   const { inputsPath, inputs, commitment, connection } = params;
 
   const programId = new PublicKey(inputs.programId);
-  const oldQxMint = new PublicKey(inputs.oldQxMint);
-  const newQxMint = new PublicKey(inputs.newQxMint);
+  const sourceMint = new PublicKey(inputs.sourceMint);
+  const destinationMint = new PublicKey(inputs.destinationMint);
   const reserveVault = new PublicKey(inputs.reserveVault);
   const opsAdmin = new PublicKey(inputs.opsAdmin);
   const initializerAuthority = new PublicKey(inputs.initializerAuthority);
@@ -500,7 +500,7 @@ export async function validateMainnetInputsReport(params: {
     await Promise.all([
       connection.getGenesisHash(),
       connection.getMultipleAccountsInfoAndContext(
-        [programId, programDataPda, oldQxMint, newQxMint, reserveVault, configPda],
+        [programId, programDataPda, sourceMint, destinationMint, reserveVault, configPda],
         commitment,
       ),
       inputs.fundingSignature
@@ -513,7 +513,7 @@ export async function validateMainnetInputsReport(params: {
             connection,
             inputs.fundingSignature,
             reserveVault,
-            newQxMint,
+            destinationMint,
             commitment,
           )
         : Promise.resolve(null),
@@ -529,10 +529,10 @@ export async function validateMainnetInputsReport(params: {
     throw new Error(`ProgramData account not found: ${programDataPda.toBase58()}`);
   }
   if (!oldMintInfo) {
-    throw new Error(`Old mint account not found: ${oldQxMint.toBase58()}`);
+    throw new Error(`Old mint account not found: ${sourceMint.toBase58()}`);
   }
   if (!mintInfo) {
-    throw new Error(`Mint account not found: ${newQxMint.toBase58()}`);
+    throw new Error(`Mint account not found: ${destinationMint.toBase58()}`);
   }
   if (!reserveInfo) {
     throw new Error(`Reserve vault not found: ${reserveVault.toBase58()}`);
@@ -604,8 +604,8 @@ export async function validateMainnetInputsReport(params: {
     executableHash,
     reviewedBuildInfo,
     resolvedProgramSoPath,
-    oldQxMint,
-    newQxMint,
+    sourceMint,
+    destinationMint,
     reserveVault,
     opsAdmin,
     initializerAuthority,
@@ -624,8 +624,8 @@ export async function validateMainnetInputsReport(params: {
     inputs: {
       cluster: inputs.cluster,
       programId: programId.toBase58(),
-      oldQxMint: oldQxMint.toBase58(),
-      newQxMint: newQxMint.toBase58(),
+      sourceMint: sourceMint.toBase58(),
+      destinationMint: destinationMint.toBase58(),
       reserveVault: reserveVault.toBase58(),
       opsAdmin: opsAdmin.toBase58(),
       initializerAuthority: initializerAuthority.toBase58(),
@@ -673,11 +673,11 @@ export async function validateMainnetInputsReport(params: {
           ? null
           : {
               admin: parsedConfig.admin.toBase58(),
-              oldQxMint: parsedConfig.oldQxMint.toBase58(),
-              newQxMint: parsedConfig.newQxMint.toBase58(),
+              sourceMint: parsedConfig.sourceMint.toBase58(),
+              destinationMint: parsedConfig.destinationMint.toBase58(),
               tokenProgramId: parsedConfig.tokenProgramId.toBase58(),
               vaultAuthority: parsedConfig.vaultAuthority.toBase58(),
-              vaultNewQx: parsedConfig.vaultNewQx.toBase58(),
+              reserveVault: parsedConfig.reserveVault.toBase58(),
               totalMigrated: parsedConfig.totalMigrated.toString(),
               migrationCap: parsedConfig.migrationCap.toString(),
               startTs: parsedConfig.startTs.toString(),

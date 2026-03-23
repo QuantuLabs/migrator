@@ -231,9 +231,9 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
     let config = Address::new_unique();
     let funding_new_token_account = Address::new_unique();
     let vault_authority = Address::new_unique();
-    let vault_new_qx = Address::new_unique();
-    let old_qx_mint = Address::new_unique();
-    let new_qx_mint = Address::new_unique();
+    let reserve_vault = Address::new_unique();
+    let source_mint = Address::new_unique();
+    let destination_mint = Address::new_unique();
     let token_program = Address::new_unique();
     let system_program = Address::new_unique();
     let program_data = Address::new_unique();
@@ -242,9 +242,9 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
         config,
         funding_new_token_account,
         vault_authority,
-        vault_new_qx,
-        old_qx_mint,
-        new_qx_mint,
+        reserve_vault,
+        source_mint,
+        destination_mint,
         token_program,
         system_program,
         program_data,
@@ -261,9 +261,9 @@ fn load_program_and_reject_initialize_with_short_window_payload() {
             AccountMeta::new(funding_new_token_account, false),
             AccountMeta::new(config, false),
             AccountMeta::new_readonly(vault_authority, false),
-            AccountMeta::new(vault_new_qx, false),
-            AccountMeta::new_readonly(old_qx_mint, false),
-            AccountMeta::new_readonly(new_qx_mint, false),
+            AccountMeta::new(reserve_vault, false),
+            AccountMeta::new_readonly(source_mint, false),
+            AccountMeta::new_readonly(destination_mint, false),
             AccountMeta::new_readonly(token_program, false),
             AccountMeta::new_readonly(system_program, false),
             AccountMeta::new_readonly(program_data, false),
@@ -292,9 +292,9 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
     let config = Address::new_unique();
     let funding_new_token_account = Address::new_unique();
     let vault_authority = Address::new_unique();
-    let vault_new_qx = Address::new_unique();
-    let old_qx_mint = Address::new_unique();
-    let new_qx_mint = Address::new_unique();
+    let reserve_vault = Address::new_unique();
+    let source_mint = Address::new_unique();
+    let destination_mint = Address::new_unique();
     let token_program = Address::new_unique();
     let system_program = Address::new_unique();
     let program_data = Address::new_unique();
@@ -303,9 +303,9 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
         config,
         funding_new_token_account,
         vault_authority,
-        vault_new_qx,
-        old_qx_mint,
-        new_qx_mint,
+        reserve_vault,
+        source_mint,
+        destination_mint,
         token_program,
         system_program,
         program_data,
@@ -328,9 +328,9 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
             AccountMeta::new(funding_new_token_account, false),
             AccountMeta::new(config, false),
             AccountMeta::new_readonly(vault_authority, false),
-            AccountMeta::new(vault_new_qx, false),
-            AccountMeta::new_readonly(old_qx_mint, false),
-            AccountMeta::new_readonly(new_qx_mint, false),
+            AccountMeta::new(reserve_vault, false),
+            AccountMeta::new_readonly(source_mint, false),
+            AccountMeta::new_readonly(destination_mint, false),
             AccountMeta::new_readonly(token_program, false),
             AccountMeta::new_readonly(system_program, false),
             AccountMeta::new_readonly(program_data, false),
@@ -353,17 +353,17 @@ fn load_program_and_reject_withdraw_unclaimed_with_trailing_payload() {
 
     let config = Address::new_unique();
     let vault_authority = Address::new_unique();
-    let vault_new_qx = Address::new_unique();
-    let refund_recipient_new_qx = Address::new_unique();
-    let new_qx_mint = Address::new_unique();
+    let reserve_vault = Address::new_unique();
+    let refund_recipient_token_account = Address::new_unique();
+    let destination_mint = Address::new_unique();
     let token_program = Address::new_unique();
 
     for address in [
         config,
         vault_authority,
-        vault_new_qx,
-        refund_recipient_new_qx,
-        new_qx_mint,
+        reserve_vault,
+        refund_recipient_token_account,
+        destination_mint,
         token_program,
     ] {
         set_placeholder_system_account(&mut svm, address);
@@ -374,9 +374,9 @@ fn load_program_and_reject_withdraw_unclaimed_with_trailing_payload() {
         accounts: vec![
             AccountMeta::new_readonly(config, false),
             AccountMeta::new_readonly(vault_authority, false),
-            AccountMeta::new(vault_new_qx, false),
-            AccountMeta::new(refund_recipient_new_qx, false),
-            AccountMeta::new_readonly(new_qx_mint, false),
+            AccountMeta::new(reserve_vault, false),
+            AccountMeta::new(refund_recipient_token_account, false),
+            AccountMeta::new_readonly(destination_mint, false),
             AccountMeta::new_readonly(token_program, false),
         ],
         data: vec![3u8, 0u8],

@@ -122,8 +122,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     config.vault_authority_bump = vault_authority_bump;
     config.paused = 0;
     config.admin.copy_from_slice(ops_admin.address().as_ref());
-    config.old_qx_mint.copy_from_slice(&old_mint_key);
-    config.new_qx_mint.copy_from_slice(&new_mint_key);
+    config.source_mint.copy_from_slice(&old_mint_key);
+    config.destination_mint.copy_from_slice(&new_mint_key);
     config
         .token_program_id
         .copy_from_slice(token_program.address().as_ref());
@@ -131,7 +131,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         .vault_authority
         .copy_from_slice(vault_authority.address().as_ref());
     config
-        .vault_new_qx
+        .reserve_vault
         .copy_from_slice(vault_new_token_account.address().as_ref());
     config.total_migrated = 0;
     config.start_ts = start_ts;

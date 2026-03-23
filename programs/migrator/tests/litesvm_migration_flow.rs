@@ -18,8 +18,8 @@ use solana_transaction_error::TransactionError;
 
 const OLD_MINT_BYTES: [u8; 32] = [41u8; 32];
 const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
-const VAULT_NEW_QX_BYTES: [u8; 32] = [43u8; 32];
-const USER_OLD_QX_BYTES: [u8; 32] = [44u8; 32];
+const RESERVE_VAULT_BYTES: [u8; 32] = [43u8; 32];
+const USER_SOURCE_TOKEN_BYTES: [u8; 32] = [44u8; 32];
 const NATIVE_MINT_BYTES: [u8; 32] = [
     6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220, 26,
     235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
@@ -140,13 +140,13 @@ struct MigrationFlowFixture {
     config_pda: Address,
     vault_authority_pda: Address,
     program_data: Address,
-    old_qx_mint: Address,
-    new_qx_mint: Address,
-    funding_new_qx: Address,
-    vault_new_qx: Address,
-    user_old_qx: Address,
-    user_new_qx: Address,
-    refund_recipient_new_qx: Address,
+    source_mint: Address,
+    destination_mint: Address,
+    funding_token_account: Address,
+    reserve_vault: Address,
+    user_source_tokens: Address,
+    user_destination_tokens: Address,
+    refund_recipient_token_account: Address,
 }
 
 impl MigrationFlowFixture {
@@ -190,14 +190,14 @@ impl MigrationFlowFixture {
         let (program_data, _) =
             Address::find_program_address(&[program_id.as_ref()], &loader_program);
 
-        let old_qx_mint = Address::new_from_array(OLD_MINT_BYTES);
-        let new_qx_mint = Address::new_from_array(NEW_MINT_BYTES);
-        let funding_new_qx = Address::new_unique();
-        let vault_new_qx = Address::new_from_array(VAULT_NEW_QX_BYTES);
-        let user_old_qx = Address::new_from_array(USER_OLD_QX_BYTES);
-        let user_new_qx = associated_token_address(&user.pubkey(), &new_qx_mint);
-        let refund_recipient_new_qx =
-            associated_token_address(&funding_authority.pubkey(), &new_qx_mint);
+        let source_mint = Address::new_from_array(OLD_MINT_BYTES);
+        let destination_mint = Address::new_from_array(NEW_MINT_BYTES);
+        let funding_token_account = Address::new_unique();
+        let reserve_vault = Address::new_from_array(RESERVE_VAULT_BYTES);
+        let user_source_tokens = Address::new_from_array(USER_SOURCE_TOKEN_BYTES);
+        let user_destination_tokens = associated_token_address(&user.pubkey(), &destination_mint);
+        let refund_recipient_token_account =
+            associated_token_address(&funding_authority.pubkey(), &destination_mint);
 
         svm.set_account(config_pda, Account::default())
             .expect("config PDA placeholder should be set as an uninitialized system account");
@@ -227,7 +227,7 @@ impl MigrationFlowFixture {
         .expect("program_data account should be set");
 
         svm.set_account(
-            old_qx_mint,
+            source_mint,
             Account {
                 lamports: 1_000_000,
                 data: make_mint_data(INITIAL_USER_OLD_BALANCE, 9),
@@ -239,7 +239,7 @@ impl MigrationFlowFixture {
         .expect("old mint should be set");
 
         svm.set_account(
-            new_qx_mint,
+            destination_mint,
             Account {
                 lamports: 1_000_000,
                 data: make_mint_data(INITIAL_RESERVE, 9),
@@ -251,10 +251,10 @@ impl MigrationFlowFixture {
         .expect("new mint should be set");
 
         svm.set_account(
-            vault_new_qx,
+            reserve_vault,
             Account {
                 lamports: 1_000_000,
-                data: make_token_account_data(&new_qx_mint, &vault_authority_pda, 0),
+                data: make_token_account_data(&destination_mint, &vault_authority_pda, 0),
                 owner: token_program,
                 executable: false,
                 rent_epoch: 0,
@@ -263,11 +263,11 @@ impl MigrationFlowFixture {
         .expect("reserve vault token account should be set");
 
         svm.set_account(
-            funding_new_qx,
+            funding_token_account,
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &new_qx_mint,
+                    &destination_mint,
                     &funding_authority.pubkey(),
                     INITIAL_RESERVE,
                 ),
@@ -279,11 +279,11 @@ impl MigrationFlowFixture {
         .expect("funding token account should be set");
 
         svm.set_account(
-            user_old_qx,
+            user_source_tokens,
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &old_qx_mint,
+                    &source_mint,
                     &user.pubkey(),
                     INITIAL_USER_OLD_BALANCE,
                 ),
@@ -295,11 +295,11 @@ impl MigrationFlowFixture {
         .expect("user old token account should be set");
 
         svm.set_account(
-            user_new_qx,
+            user_destination_tokens,
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &new_qx_mint,
+                    &destination_mint,
                     &user.pubkey(),
                     INITIAL_USER_NEW_BALANCE,
                 ),
@@ -311,11 +311,11 @@ impl MigrationFlowFixture {
         .expect("user new token account should be set");
 
         svm.set_account(
-            refund_recipient_new_qx,
+            refund_recipient_token_account,
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &new_qx_mint,
+                    &destination_mint,
                     &funding_authority.pubkey(),
                     INITIAL_USER_NEW_BALANCE,
                 ),
@@ -336,13 +336,13 @@ impl MigrationFlowFixture {
             config_pda,
             vault_authority_pda,
             program_data,
-            old_qx_mint,
-            new_qx_mint,
-            funding_new_qx,
-            vault_new_qx,
-            user_old_qx,
-            user_new_qx,
-            refund_recipient_new_qx,
+            source_mint,
+            destination_mint,
+            funding_token_account,
+            reserve_vault,
+            user_source_tokens,
+            user_destination_tokens,
+            refund_recipient_token_account,
         })
     }
 
@@ -353,11 +353,11 @@ impl MigrationFlowFixture {
         start_ts: i64,
         end_ts: i64,
         migration_cap: u64,
-        funding_new_qx: Address,
+        funding_token_account: Address,
         vault_authority: Address,
-        vault_new_qx: Address,
-        old_qx_mint: Address,
-        new_qx_mint: Address,
+        reserve_vault: Address,
+        source_mint: Address,
+        destination_mint: Address,
         token_program: Address,
         program_data: Address,
     ) -> TransactionResult {
@@ -372,12 +372,12 @@ impl MigrationFlowFixture {
                 AccountMeta::new(self.initializer.pubkey(), true),
                 AccountMeta::new_readonly(self.ops_admin.pubkey(), true),
                 AccountMeta::new_readonly(self.funding_authority.pubkey(), true),
-                AccountMeta::new(funding_new_qx, false),
+                AccountMeta::new(funding_token_account, false),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(vault_authority, false),
-                AccountMeta::new(vault_new_qx, false),
-                AccountMeta::new_readonly(old_qx_mint, false),
-                AccountMeta::new_readonly(new_qx_mint, false),
+                AccountMeta::new(reserve_vault, false),
+                AccountMeta::new_readonly(source_mint, false),
+                AccountMeta::new_readonly(destination_mint, false),
                 AccountMeta::new_readonly(token_program, false),
                 AccountMeta::new_readonly(Address::default(), false),
                 AccountMeta::new_readonly(program_data, false),
@@ -402,11 +402,11 @@ impl MigrationFlowFixture {
         &mut self,
         start_ts: i64,
         end_ts: i64,
-        funding_new_qx: Address,
+        funding_token_account: Address,
         vault_authority: Address,
-        vault_new_qx: Address,
-        old_qx_mint: Address,
-        new_qx_mint: Address,
+        reserve_vault: Address,
+        source_mint: Address,
+        destination_mint: Address,
         token_program: Address,
         program_data: Address,
     ) -> TransactionResult {
@@ -414,11 +414,11 @@ impl MigrationFlowFixture {
             start_ts,
             end_ts,
             MIGRATION_CAP,
-            funding_new_qx,
+            funding_token_account,
             vault_authority,
-            vault_new_qx,
-            old_qx_mint,
-            new_qx_mint,
+            reserve_vault,
+            source_mint,
+            destination_mint,
             token_program,
             program_data,
         )
@@ -435,11 +435,11 @@ impl MigrationFlowFixture {
             start_ts,
             end_ts,
             migration_cap,
-            self.funding_new_qx,
+            self.funding_token_account,
             self.vault_authority_pda,
-            self.vault_new_qx,
-            self.old_qx_mint,
-            self.new_qx_mint,
+            self.reserve_vault,
+            self.source_mint,
+            self.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
             self.program_data,
         )
@@ -465,10 +465,10 @@ impl MigrationFlowFixture {
         &mut self,
         amount: u64,
         vault_authority: Address,
-        vault_new_qx: Address,
-        user_new_qx: Address,
-        old_qx_mint: Address,
-        new_qx_mint: Address,
+        reserve_vault: Address,
+        user_destination_tokens: Address,
+        source_mint: Address,
+        destination_mint: Address,
         token_program: Address,
     ) -> TransactionResult {
         let mut data = vec![2u8];
@@ -480,11 +480,11 @@ impl MigrationFlowFixture {
                 AccountMeta::new_readonly(self.user.pubkey(), true),
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(vault_authority, false),
-                AccountMeta::new(vault_new_qx, false),
-                AccountMeta::new(self.user_old_qx, false),
-                AccountMeta::new(user_new_qx, false),
-                AccountMeta::new(old_qx_mint, false),
-                AccountMeta::new_readonly(new_qx_mint, false),
+                AccountMeta::new(reserve_vault, false),
+                AccountMeta::new(self.user_source_tokens, false),
+                AccountMeta::new(user_destination_tokens, false),
+                AccountMeta::new(source_mint, false),
+                AccountMeta::new_readonly(destination_mint, false),
                 AccountMeta::new_readonly(token_program, false),
             ],
             data,
@@ -502,17 +502,17 @@ impl MigrationFlowFixture {
     fn send_migrate_exact_result(
         &mut self,
         amount: u64,
-        vault_new_qx: Address,
-        old_qx_mint: Address,
-        new_qx_mint: Address,
+        reserve_vault: Address,
+        source_mint: Address,
+        destination_mint: Address,
     ) -> TransactionResult {
         self.send_migrate_exact_with_accounts_result(
             amount,
             self.vault_authority_pda,
-            vault_new_qx,
-            self.user_new_qx,
-            old_qx_mint,
-            new_qx_mint,
+            reserve_vault,
+            self.user_destination_tokens,
+            source_mint,
+            destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         )
     }
@@ -520,9 +520,9 @@ impl MigrationFlowFixture {
     fn send_migrate_exact(&mut self, amount: u64) {
         self.send_migrate_exact_result(
             amount,
-            self.vault_new_qx,
-            self.old_qx_mint,
-            self.new_qx_mint,
+            self.reserve_vault,
+            self.source_mint,
+            self.destination_mint,
         )
         .expect("migrate_exact should succeed");
     }
@@ -570,9 +570,9 @@ impl MigrationFlowFixture {
     fn send_withdraw_unclaimed_with_accounts_result(
         &mut self,
         vault_authority: Address,
-        vault_new_qx: Address,
-        refund_recipient_new_qx: Address,
-        new_qx_mint: Address,
+        reserve_vault: Address,
+        refund_recipient_token_account: Address,
+        destination_mint: Address,
         token_program: Address,
     ) -> TransactionResult {
         let ix = Instruction {
@@ -580,9 +580,9 @@ impl MigrationFlowFixture {
             accounts: vec![
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(vault_authority, false),
-                AccountMeta::new(vault_new_qx, false),
-                AccountMeta::new(refund_recipient_new_qx, false),
-                AccountMeta::new_readonly(new_qx_mint, false),
+                AccountMeta::new(reserve_vault, false),
+                AccountMeta::new(refund_recipient_token_account, false),
+                AccountMeta::new_readonly(destination_mint, false),
                 AccountMeta::new_readonly(token_program, false),
             ],
             data: vec![3u8],
@@ -600,9 +600,9 @@ impl MigrationFlowFixture {
     fn send_withdraw_unclaimed_result(&mut self) -> TransactionResult {
         self.send_withdraw_unclaimed_with_accounts_result(
             self.vault_authority_pda,
-            self.vault_new_qx,
-            self.refund_recipient_new_qx,
-            self.new_qx_mint,
+            self.reserve_vault,
+            self.refund_recipient_token_account,
+            self.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         )
     }
@@ -614,9 +614,9 @@ impl MigrationFlowFixture {
             accounts: vec![
                 AccountMeta::new(self.config_pda, false),
                 AccountMeta::new_readonly(self.vault_authority_pda, false),
-                AccountMeta::new(self.vault_new_qx, false),
-                AccountMeta::new(self.refund_recipient_new_qx, false),
-                AccountMeta::new_readonly(self.new_qx_mint, false),
+                AccountMeta::new(self.reserve_vault, false),
+                AccountMeta::new(self.refund_recipient_token_account, false),
+                AccountMeta::new_readonly(self.destination_mint, false),
                 AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
             ],
             data: vec![3u8],
@@ -822,7 +822,7 @@ impl MigrationFlowFixture {
         close_authority_option: u32,
     ) {
         self.set_token_account_controls(
-            self.vault_new_qx,
+            self.reserve_vault,
             delegate_option,
             delegated_amount,
             close_authority_option,
@@ -868,14 +868,14 @@ fn initialize_config_persists_expected_state() {
     assert_eq!(config.version, 2);
     assert_eq!(config.paused, 0);
     assert_eq!(config.admin, *fixture.ops_admin.pubkey().as_array());
-    assert_eq!(config.old_qx_mint, *fixture.old_qx_mint.as_array());
-    assert_eq!(config.new_qx_mint, *fixture.new_qx_mint.as_array());
+    assert_eq!(config.source_mint, *fixture.source_mint.as_array());
+    assert_eq!(config.destination_mint, *fixture.destination_mint.as_array());
     assert_eq!(config.token_program_id, TOKEN_PROGRAM_ID);
     assert_eq!(
         config.vault_authority,
         *fixture.vault_authority_pda.as_array()
     );
-    assert_eq!(config.vault_new_qx, *fixture.vault_new_qx.as_array());
+    assert_eq!(config.reserve_vault, *fixture.reserve_vault.as_array());
     assert_eq!(config.total_migrated, 0);
     assert_eq!(config.migration_cap(), MIGRATION_CAP);
     assert_eq!(
@@ -885,10 +885,10 @@ fn initialize_config_persists_expected_state() {
     assert_eq!(config.start_ts, 0);
     assert_eq!(config.end_ts, i64::MAX);
     assert_eq!(
-        fixture.token_balance(&fixture.funding_new_qx),
+        fixture.token_balance(&fixture.funding_token_account),
         INITIAL_RESERVE - MIGRATION_CAP
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), MIGRATION_CAP);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), MIGRATION_CAP);
 }
 
 #[test]
@@ -939,7 +939,7 @@ fn initialize_config_rejects_mint_decimal_mismatch() {
         return;
     };
 
-    fixture.set_mint_decimals(fixture.new_qx_mint, 6);
+    fixture.set_mint_decimals(fixture.destination_mint, 6);
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
         custom_error(MigrationError::InvalidConfig),
@@ -954,7 +954,7 @@ fn initialize_config_rejects_old_mint_with_mint_authority() {
         return;
     };
 
-    fixture.set_mint_authority_option(fixture.old_qx_mint, 1);
+    fixture.set_mint_authority_option(fixture.source_mint, 1);
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -970,7 +970,7 @@ fn initialize_config_rejects_new_mint_with_freeze_authority() {
         return;
     };
 
-    fixture.set_mint_freeze_authority_option(fixture.new_qx_mint, 1);
+    fixture.set_mint_freeze_authority_option(fixture.destination_mint, 1);
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -986,7 +986,7 @@ fn initialize_config_rejects_old_mint_owned_by_wrong_program() {
         return;
     };
 
-    fixture.set_account_owner_program(fixture.old_qx_mint, Address::new_unique());
+    fixture.set_account_owner_program(fixture.source_mint, Address::new_unique());
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -1072,11 +1072,11 @@ fn initialize_config_rejects_same_old_and_new_mint() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
-            fixture.funding_new_qx,
+            fixture.funding_token_account,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.old_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.source_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
             fixture.program_data,
         ),
@@ -1109,11 +1109,11 @@ fn initialize_config_rejects_native_old_mint() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
-            fixture.funding_new_qx,
+            fixture.funding_token_account,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
+            fixture.reserve_vault,
             native_mint,
-            fixture.new_qx_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
             fixture.program_data,
         ),
@@ -1148,10 +1148,10 @@ fn initialize_config_rejects_native_new_mint() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
-            fixture.funding_new_qx,
+            fixture.funding_token_account,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
             native_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
             fixture.program_data,
@@ -1172,11 +1172,11 @@ fn initialize_config_rejects_invalid_token_program_account() {
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
-            fixture.funding_new_qx,
+            fixture.funding_token_account,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_unique(),
             fixture.program_data,
         ),
@@ -1194,11 +1194,11 @@ fn initialize_config_rejects_when_config_pda_is_reused_as_reserve_vault_account(
         fixture.send_initialize_config_with_accounts_result(
             0,
             i64::MAX,
-            fixture.funding_new_qx,
+            fixture.funding_token_account,
             fixture.vault_authority_pda,
             fixture.config_pda,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
             fixture.program_data,
         ),
@@ -1242,7 +1242,7 @@ fn initialize_config_rejects_reserve_vault_owned_by_wrong_program() {
         return;
     };
 
-    fixture.set_account_owner_program(fixture.vault_new_qx, Address::new_unique());
+    fixture.set_account_owner_program(fixture.reserve_vault, Address::new_unique());
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -1256,7 +1256,7 @@ fn initialize_config_rejects_prefunded_vault() {
         return;
     };
 
-    fixture.set_token_balance(fixture.vault_new_qx, 1);
+    fixture.set_token_balance(fixture.reserve_vault, 1);
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -1272,7 +1272,7 @@ fn initialize_config_rejects_funding_source_owned_by_wrong_wallet() {
         return;
     };
 
-    fixture.set_token_account_owner_field(fixture.funding_new_qx, fixture.user.pubkey());
+    fixture.set_token_account_owner_field(fixture.funding_token_account, fixture.user.pubkey());
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -1288,7 +1288,7 @@ fn initialize_config_rejects_funding_source_with_delegate_controls() {
         return;
     };
 
-    fixture.set_token_account_controls(fixture.funding_new_qx, 1, 1, 0, 0);
+    fixture.set_token_account_controls(fixture.funding_token_account, 1, 1, 0, 0);
 
     assert_tx_error(
         fixture.send_initialize_config_result(0, i64::MAX),
@@ -1307,41 +1307,41 @@ fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
     fixture.send_initialize_config(0, i64::MAX);
 
     assert_eq!(
-        fixture.token_balance(&fixture.user_old_qx),
+        fixture.token_balance(&fixture.user_source_tokens),
         INITIAL_USER_OLD_BALANCE
     );
     assert_eq!(
-        fixture.token_balance(&fixture.user_new_qx),
+        fixture.token_balance(&fixture.user_destination_tokens),
         INITIAL_USER_NEW_BALANCE
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), MIGRATION_CAP);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), MIGRATION_CAP);
     assert_eq!(
-        fixture.mint_supply(&fixture.old_qx_mint),
+        fixture.mint_supply(&fixture.source_mint),
         INITIAL_USER_OLD_BALANCE
     );
-    assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), INITIAL_RESERVE);
+    assert_eq!(fixture.mint_supply(&fixture.destination_mint), INITIAL_RESERVE);
 
     fixture.send_migrate_exact(MIGRATION_AMOUNT);
 
     let config = fixture.config();
     assert_eq!(config.total_migrated, MIGRATION_AMOUNT);
     assert_eq!(
-        fixture.token_balance(&fixture.user_old_qx),
+        fixture.token_balance(&fixture.user_source_tokens),
         INITIAL_USER_OLD_BALANCE - MIGRATION_AMOUNT
     );
     assert_eq!(
-        fixture.token_balance(&fixture.user_new_qx),
+        fixture.token_balance(&fixture.user_destination_tokens),
         INITIAL_USER_NEW_BALANCE + MIGRATION_AMOUNT
     );
     assert_eq!(
-        fixture.token_balance(&fixture.vault_new_qx),
+        fixture.token_balance(&fixture.reserve_vault),
         MIGRATION_CAP - MIGRATION_AMOUNT
     );
     assert_eq!(
-        fixture.mint_supply(&fixture.old_qx_mint),
+        fixture.mint_supply(&fixture.source_mint),
         INITIAL_USER_OLD_BALANCE - MIGRATION_AMOUNT
     );
-    assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), INITIAL_RESERVE);
+    assert_eq!(fixture.mint_supply(&fixture.destination_mint), INITIAL_RESERVE);
 }
 
 #[test]
@@ -1356,34 +1356,34 @@ fn migrate_exact_progressively_reaches_migration_cap_and_rejects_next_unit() {
 
     assert_eq!(fixture.config().total_migrated, 2 * MIGRATION_AMOUNT);
     assert_eq!(
-        fixture.token_balance(&fixture.user_old_qx),
+        fixture.token_balance(&fixture.user_source_tokens),
         INITIAL_USER_OLD_BALANCE - (2 * MIGRATION_AMOUNT)
     );
     assert_eq!(
-        fixture.token_balance(&fixture.user_new_qx),
+        fixture.token_balance(&fixture.user_destination_tokens),
         INITIAL_USER_NEW_BALANCE + (2 * MIGRATION_AMOUNT)
     );
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let old_supply_before = fixture.mint_supply(&fixture.source_mint);
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             1,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::MigrationCapExceeded),
     );
 
     assert_eq!(fixture.config().total_migrated, 2 * MIGRATION_AMOUNT);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
-    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.source_mint), old_supply_before);
 }
 
 #[test]
@@ -1395,28 +1395,28 @@ fn migrate_exact_rejects_when_paused_without_mutating_balances() {
     fixture.send_initialize_config(0, i64::MAX);
     fixture.send_set_pause(true);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let old_supply_before = fixture.mint_supply(&fixture.source_mint);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::ProtocolPaused),
     );
 
     assert_eq!(fixture.config().paused, 1);
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
-    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.source_mint), old_supply_before);
 }
 
 #[test]
@@ -1451,27 +1451,27 @@ fn migrate_exact_rejects_when_reserve_is_insufficient() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_balance(fixture.vault_new_qx, MIGRATION_AMOUNT - 1);
+    fixture.set_token_balance(fixture.reserve_vault, MIGRATION_AMOUNT - 1);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InsufficientVaultLiquidity),
     );
 
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
     assert_eq!(
-        fixture.token_balance(&fixture.vault_new_qx),
+        fixture.token_balance(&fixture.reserve_vault),
         MIGRATION_AMOUNT - 1
     );
 }
@@ -1484,27 +1484,27 @@ fn migrate_exact_rejects_when_migration_cap_would_be_exceeded() {
 
     fixture.send_initialize_config_with_cap(0, i64::MAX, MIGRATION_AMOUNT - 1);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let old_supply_before = fixture.mint_supply(&fixture.source_mint);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::MigrationCapExceeded),
     );
 
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
-    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.source_mint), old_supply_before);
 }
 
 #[test]
@@ -1516,21 +1516,21 @@ fn migrate_exact_rejects_when_window_is_closed() {
     fixture.send_initialize_config(i64::MIN, i64::MAX);
     fixture.set_config_window(i64::MIN, -1);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::MigrationClosed),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
     assert_eq!(fixture.config().total_migrated, 0);
 }
 
@@ -1543,22 +1543,22 @@ fn migrate_exact_rejects_when_window_is_not_started() {
     fixture.send_initialize_config(i64::MIN, i64::MAX);
     fixture.set_config_window(i64::MAX - 1, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::MigrationNotStarted),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1570,24 +1570,24 @@ fn migrate_exact_rejects_zero_amount_without_mutating_state() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             0,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::ZeroAmount),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1598,24 +1598,24 @@ fn migrate_exact_rejects_when_user_new_account_owner_mismatches_signer() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_account_owner_field(fixture.user_new_qx, Address::new_unique());
+    fixture.set_token_account_owner_field(fixture.user_destination_tokens, Address::new_unique());
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::Unauthorized),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1626,14 +1626,14 @@ fn migrate_exact_rejects_when_user_new_account_is_uninitialized() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_account_state(fixture.user_new_qx, 0);
+    fixture.set_token_account_state(fixture.user_destination_tokens, 0);
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::AccountNotInitialized),
     );
@@ -1646,24 +1646,24 @@ fn migrate_exact_rejects_when_user_new_account_owner_program_is_wrong() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_account_owner_program(fixture.user_new_qx, Address::new_unique());
+    fixture.set_account_owner_program(fixture.user_destination_tokens, Address::new_unique());
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidTokenProgram),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1674,14 +1674,14 @@ fn migrate_exact_rejects_when_user_new_account_mint_mismatches_config() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_account_mint(fixture.user_new_qx, fixture.old_qx_mint);
+    fixture.set_token_account_mint(fixture.user_destination_tokens, fixture.source_mint);
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidConfig),
     );
@@ -1695,25 +1695,25 @@ fn migrate_exact_rejects_when_user_old_and_user_new_accounts_alias() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_with_accounts_result(
             MIGRATION_AMOUNT,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.user_old_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.user_source_tokens,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidConfig),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1725,22 +1725,22 @@ fn migrate_exact_rejects_when_config_pda_is_reused_as_reserve_vault_account() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
             fixture.config_pda,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidVault),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1751,26 +1751,26 @@ fn migrate_exact_rejects_when_user_new_account_has_delegate_controls() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_account_controls(fixture.user_new_qx, 1, 1, 0, 0);
+    fixture.set_token_account_controls(fixture.user_destination_tokens, 1, 1, 0, 0);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidTokenAccountControls),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1781,14 +1781,14 @@ fn migrate_exact_rejects_when_user_new_account_is_native_wrapped() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_account_controls(fixture.user_new_qx, 0, 0, 0, 1);
+    fixture.set_token_account_controls(fixture.user_destination_tokens, 0, 0, 0, 1);
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidTokenAccountControls),
     );
@@ -1802,15 +1802,15 @@ fn migrate_exact_rejects_non_ata_destination_account() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let alt_user_new_qx = Address::new_unique();
+    let alt_user_destination_tokens = Address::new_unique();
     fixture
         .svm
         .set_account(
-            alt_user_new_qx,
+            alt_user_destination_tokens,
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &fixture.new_qx_mint,
+                    &fixture.destination_mint,
                     &fixture.user.pubkey(),
                     INITIAL_USER_NEW_BALANCE,
                 ),
@@ -1821,33 +1821,33 @@ fn migrate_exact_rejects_non_ata_destination_account() {
         )
         .expect("alternate user destination should be set");
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_with_accounts_result(
             MIGRATION_AMOUNT,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            alt_user_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            alt_user_destination_tokens,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidDestinationTokenAccount),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
     assert_eq!(
-        fixture.token_balance(&fixture.user_new_qx),
+        fixture.token_balance(&fixture.user_destination_tokens),
         INITIAL_USER_NEW_BALANCE
     );
     assert_eq!(
-        fixture.token_balance(&alt_user_new_qx),
+        fixture.token_balance(&alt_user_destination_tokens),
         INITIAL_USER_NEW_BALANCE
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1859,25 +1859,25 @@ fn migrate_exact_rejects_when_destination_aliases_reserve_vault() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_with_accounts_result(
             MIGRATION_AMOUNT,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::Unauthorized),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1889,27 +1889,27 @@ fn migrate_exact_rejects_when_destination_aliases_user_old_account() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_with_accounts_result(
             MIGRATION_AMOUNT,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.user_old_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.user_source_tokens,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidConfig),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1925,19 +1925,19 @@ fn migrate_exact_rejects_when_old_mint_account_does_not_match_config() {
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
+            fixture.reserve_vault,
             wrong_old_mint,
-            fixture.new_qx_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidOldMint),
     );
 
     assert_eq!(
-        fixture.token_balance(&fixture.user_old_qx),
+        fixture.token_balance(&fixture.user_source_tokens),
         INITIAL_USER_OLD_BALANCE
     );
     assert_eq!(
-        fixture.token_balance(&fixture.user_new_qx),
+        fixture.token_balance(&fixture.user_destination_tokens),
         INITIAL_USER_NEW_BALANCE
     );
     assert_eq!(fixture.config().total_migrated, 0);
@@ -1966,24 +1966,24 @@ fn migrate_exact_rejects_when_new_mint_account_does_not_match_config() {
         )
         .expect("wrong new mint account should be set");
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let user_new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
             wrong_new_mint,
         ),
         custom_error(MigrationError::InvalidNewMint),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -1995,27 +1995,27 @@ fn migrate_exact_rejects_when_vault_authority_account_does_not_match_config() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let user_new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_with_accounts_result(
             MIGRATION_AMOUNT,
             Address::new_unique(),
-            fixture.vault_new_qx,
-            fixture.user_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.user_destination_tokens,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidVaultAuthority),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -2027,27 +2027,27 @@ fn migrate_exact_rejects_when_token_program_account_is_wrong() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let user_new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_with_accounts_result(
             MIGRATION_AMOUNT,
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.user_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.user_destination_tokens,
+            fixture.source_mint,
+            fixture.destination_mint,
             Address::new_unique(),
         ),
         custom_error(MigrationError::InvalidTokenProgram),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -2059,15 +2059,15 @@ fn migrate_exact_rejects_when_vault_account_does_not_match_config() {
 
     fixture.send_initialize_config(0, i64::MAX);
 
-    let wrong_vault_new_qx = Address::new_unique();
+    let wrong_reserve_vault = Address::new_unique();
     fixture
         .svm
         .set_account(
-            wrong_vault_new_qx,
+            wrong_reserve_vault,
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &fixture.new_qx_mint,
+                    &fixture.destination_mint,
                     &fixture.vault_authority_pda,
                     INITIAL_RESERVE,
                 ),
@@ -2078,27 +2078,27 @@ fn migrate_exact_rejects_when_vault_account_does_not_match_config() {
         )
         .expect("wrong vault token account should be set");
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let wrong_vault_before = fixture.token_balance(&wrong_vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let user_new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let wrong_vault_before = fixture.token_balance(&wrong_reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            wrong_vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            wrong_reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidVault),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&wrong_vault_new_qx),
+        fixture.token_balance(&wrong_reserve_vault),
         wrong_vault_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2113,24 +2113,24 @@ fn migrate_exact_rejects_when_reserve_vault_has_delegate_controls() {
     fixture.send_initialize_config(0, i64::MAX);
     fixture.set_reserve_vault_controls(1, 1, 0);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidTokenAccountControls),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -2146,9 +2146,9 @@ fn migrate_exact_rejects_when_reserve_vault_has_close_authority_controls() {
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::InvalidTokenAccountControls),
     );
@@ -2161,29 +2161,29 @@ fn migrate_exact_rolls_back_when_burn_cpi_fails() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_mint_supply(fixture.old_qx_mint, MIGRATION_AMOUNT - 1);
+    fixture.set_mint_supply(fixture.source_mint, MIGRATION_AMOUNT - 1);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
-    let new_supply_before = fixture.mint_supply(&fixture.new_qx_mint);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let old_supply_before = fixture.mint_supply(&fixture.source_mint);
+    let new_supply_before = fixture.mint_supply(&fixture.destination_mint);
     let total_before = fixture.config().total_migrated;
 
     let tx_result = fixture.send_migrate_exact_result(
         MIGRATION_AMOUNT,
-        fixture.vault_new_qx,
-        fixture.old_qx_mint,
-        fixture.new_qx_mint,
+        fixture.reserve_vault,
+        fixture.source_mint,
+        fixture.destination_mint,
     );
     assert!(tx_result.is_err(), "burn CPI should fail");
 
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
-    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
-    assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), new_supply_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.source_mint), old_supply_before);
+    assert_eq!(fixture.mint_supply(&fixture.destination_mint), new_supply_before);
 }
 
 #[test]
@@ -2193,24 +2193,24 @@ fn migrate_exact_rejects_when_user_old_account_owner_mismatches_signer() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_account_owner_field(fixture.user_old_qx, Address::new_unique());
+    fixture.set_token_account_owner_field(fixture.user_source_tokens, Address::new_unique());
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_migrate_exact_result(
             MIGRATION_AMOUNT,
-            fixture.vault_new_qx,
-            fixture.old_qx_mint,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.source_mint,
+            fixture.destination_mint,
         ),
         custom_error(MigrationError::Unauthorized),
     );
 
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
 
@@ -2221,20 +2221,20 @@ fn migrate_exact_rolls_back_when_user_old_balance_is_insufficient() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    fixture.set_token_balance(fixture.user_old_qx, MIGRATION_AMOUNT - 1);
+    fixture.set_token_balance(fixture.user_source_tokens, MIGRATION_AMOUNT - 1);
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
-    let new_supply_before = fixture.mint_supply(&fixture.new_qx_mint);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let old_supply_before = fixture.mint_supply(&fixture.source_mint);
+    let new_supply_before = fixture.mint_supply(&fixture.destination_mint);
     let total_before = fixture.config().total_migrated;
 
     let tx_result = fixture.send_migrate_exact_result(
         MIGRATION_AMOUNT,
-        fixture.vault_new_qx,
-        fixture.old_qx_mint,
-        fixture.new_qx_mint,
+        fixture.reserve_vault,
+        fixture.source_mint,
+        fixture.destination_mint,
     );
     assert!(
         tx_result.is_err(),
@@ -2242,11 +2242,11 @@ fn migrate_exact_rolls_back_when_user_old_balance_is_insufficient() {
     );
 
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
-    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
-    assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), new_supply_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.source_mint), old_supply_before);
+    assert_eq!(fixture.mint_supply(&fixture.destination_mint), new_supply_before);
 }
 
 #[test]
@@ -2258,18 +2258,18 @@ fn migrate_exact_rolls_back_burn_when_transfer_signing_fails() {
     fixture.send_initialize_config(0, i64::MAX);
     fixture.set_config_vault_authority_bump(fixture.config().vault_authority_bump.wrapping_add(1));
 
-    let old_before = fixture.token_balance(&fixture.user_old_qx);
-    let new_before = fixture.token_balance(&fixture.user_new_qx);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
-    let new_supply_before = fixture.mint_supply(&fixture.new_qx_mint);
+    let old_before = fixture.token_balance(&fixture.user_source_tokens);
+    let new_before = fixture.token_balance(&fixture.user_destination_tokens);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let old_supply_before = fixture.mint_supply(&fixture.source_mint);
+    let new_supply_before = fixture.mint_supply(&fixture.destination_mint);
     let total_before = fixture.config().total_migrated;
 
     let tx_result = fixture.send_migrate_exact_result(
         MIGRATION_AMOUNT,
-        fixture.vault_new_qx,
-        fixture.old_qx_mint,
-        fixture.new_qx_mint,
+        fixture.reserve_vault,
+        fixture.source_mint,
+        fixture.destination_mint,
     );
     assert!(
         tx_result.is_err(),
@@ -2277,11 +2277,11 @@ fn migrate_exact_rolls_back_burn_when_transfer_signing_fails() {
     );
 
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), new_before);
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
-    assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
-    assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), new_supply_before);
+    assert_eq!(fixture.token_balance(&fixture.user_source_tokens), old_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), new_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
+    assert_eq!(fixture.mint_supply(&fixture.source_mint), old_supply_before);
+    assert_eq!(fixture.mint_supply(&fixture.destination_mint), new_supply_before);
 }
 
 #[test]
@@ -2295,19 +2295,19 @@ fn withdraw_unclaimed_sweeps_full_vault_balance_to_fixed_refund_recipient() {
     fixture.set_config_window(-1, -1);
 
     let surplus_amount = 7;
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx) + surplus_amount;
-    fixture.set_token_balance(fixture.vault_new_qx, reserve_before);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
-    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault) + surplus_amount;
+    fixture.set_token_balance(fixture.reserve_vault, reserve_before);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
+    let user_new_before = fixture.token_balance(&fixture.user_destination_tokens);
 
     fixture.send_withdraw_unclaimed();
 
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), 0);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), 0);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before + reserve_before
     );
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), user_new_before);
     assert_eq!(fixture.config().total_migrated, MIGRATION_AMOUNT);
     assert!(fixture.config().unclaimed_withdrawn());
 }
@@ -2319,17 +2319,17 @@ fn withdraw_unclaimed_rejects_before_deadline() {
     };
 
     fixture.send_initialize_config(0, i64::MAX);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_result(),
         custom_error(MigrationError::MigrationStillOpen),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2346,17 +2346,17 @@ fn withdraw_unclaimed_rejects_when_paused_even_after_deadline() {
     fixture.send_migrate_exact(MIGRATION_AMOUNT);
     fixture.send_set_pause(true);
     fixture.set_config_window(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_result(),
         custom_error(MigrationError::ProtocolPaused),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2370,17 +2370,17 @@ fn withdraw_unclaimed_rejects_at_exact_end_boundary_without_mutation() {
     };
 
     fixture.send_initialize_config(-1, 0);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_result(),
         custom_error(MigrationError::MigrationStillOpen),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2394,8 +2394,8 @@ fn withdraw_unclaimed_rejects_wrong_refund_destination_ata() {
     };
 
     fixture.send_initialize_config(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
     let wrong_destination = Address::new_unique();
     fixture
@@ -2405,7 +2405,7 @@ fn withdraw_unclaimed_rejects_wrong_refund_destination_ata() {
             Account {
                 lamports: 1_000_000,
                 data: make_token_account_data(
-                    &fixture.new_qx_mint,
+                    &fixture.destination_mint,
                     &fixture.funding_authority.pubkey(),
                     INITIAL_USER_NEW_BALANCE,
                 ),
@@ -2419,16 +2419,16 @@ fn withdraw_unclaimed_rejects_wrong_refund_destination_ata() {
     assert_tx_error(
         fixture.send_withdraw_unclaimed_with_accounts_result(
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
+            fixture.reserve_vault,
             wrong_destination,
-            fixture.new_qx_mint,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidDestinationTokenAccount),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2442,23 +2442,23 @@ fn withdraw_unclaimed_rejects_wrong_vault_account() {
     };
 
     fixture.send_initialize_config(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_with_accounts_result(
             fixture.vault_authority_pda,
-            fixture.user_new_qx,
-            fixture.refund_recipient_new_qx,
-            fixture.new_qx_mint,
+            fixture.user_destination_tokens,
+            fixture.refund_recipient_token_account,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidVault),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2472,23 +2472,23 @@ fn withdraw_unclaimed_rejects_wrong_token_program_account() {
     };
 
     fixture.send_initialize_config(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_with_accounts_result(
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.refund_recipient_new_qx,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.refund_recipient_token_account,
+            fixture.destination_mint,
             Address::new_unique(),
         ),
         custom_error(MigrationError::InvalidTokenProgram),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2502,23 +2502,23 @@ fn withdraw_unclaimed_rejects_wrong_vault_authority_account() {
     };
 
     fixture.send_initialize_config(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_with_accounts_result(
             fixture.user.pubkey(),
-            fixture.vault_new_qx,
-            fixture.refund_recipient_new_qx,
-            fixture.new_qx_mint,
+            fixture.reserve_vault,
+            fixture.refund_recipient_token_account,
+            fixture.destination_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidVaultAuthority),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2532,23 +2532,23 @@ fn withdraw_unclaimed_rejects_wrong_new_mint_account() {
     };
 
     fixture.send_initialize_config(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_with_accounts_result(
             fixture.vault_authority_pda,
-            fixture.vault_new_qx,
-            fixture.refund_recipient_new_qx,
-            fixture.old_qx_mint,
+            fixture.reserve_vault,
+            fixture.refund_recipient_token_account,
+            fixture.source_mint,
             Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidNewMint),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2562,18 +2562,18 @@ fn withdraw_unclaimed_rejects_refund_ata_with_delegate_controls() {
     };
 
     fixture.send_initialize_config(-1, -1);
-    fixture.set_token_account_controls(fixture.refund_recipient_new_qx, 1, 1, 0, 0);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    fixture.set_token_account_controls(fixture.refund_recipient_token_account, 1, 1, 0, 0);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     assert_tx_error(
         fixture.send_withdraw_unclaimed_result(),
         custom_error(MigrationError::InvalidTokenAccountControls),
     );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), reserve_before);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2589,9 +2589,9 @@ fn withdraw_unclaimed_is_permissionless_and_still_pays_fixed_refund_recipient() 
     fixture.send_initialize_config(0, 10);
     fixture.send_migrate_exact(MIGRATION_AMOUNT);
     fixture.set_config_window(-1, -1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
-    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
+    let reserve_before = fixture.token_balance(&fixture.reserve_vault);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
+    let user_new_before = fixture.token_balance(&fixture.user_destination_tokens);
     let third_party = Keypair::new();
     fixture
         .svm
@@ -2602,12 +2602,12 @@ fn withdraw_unclaimed_is_permissionless_and_still_pays_fixed_refund_recipient() 
         .send_withdraw_unclaimed_result_with_payer(&third_party)
         .expect("permissionless withdraw_unclaimed should succeed");
 
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), 0);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), 0);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before + reserve_before
     );
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
+    assert_eq!(fixture.token_balance(&fixture.user_destination_tokens), user_new_before);
     assert!(fixture.config().unclaimed_withdrawn());
 }
 
@@ -2626,15 +2626,15 @@ fn withdraw_unclaimed_sweeps_remaining_balance_when_vault_is_underfunded() {
         .checked_sub(fixture.config().total_migrated)
         .unwrap()
         - 1;
-    fixture.set_token_balance(fixture.vault_new_qx, reserve_before);
-    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    fixture.set_token_balance(fixture.reserve_vault, reserve_before);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_before = fixture.config().total_migrated;
 
     fixture.send_withdraw_unclaimed();
 
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), 0);
+    assert_eq!(fixture.token_balance(&fixture.reserve_vault), 0);
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_before + reserve_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
@@ -2654,8 +2654,8 @@ fn withdraw_unclaimed_rejects_after_unclaimed_amount_is_already_withdrawn() {
         .svm
         .airdrop(&second_payer.pubkey(), 1_000_000_000)
         .expect("second payer should be funded");
-    let reserve_after_first = fixture.token_balance(&fixture.vault_new_qx);
-    let refund_after_first = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let reserve_after_first = fixture.token_balance(&fixture.reserve_vault);
+    let refund_after_first = fixture.token_balance(&fixture.refund_recipient_token_account);
     let total_after_first = fixture.config().total_migrated;
 
     assert_tx_error(
@@ -2663,11 +2663,11 @@ fn withdraw_unclaimed_rejects_after_unclaimed_amount_is_already_withdrawn() {
         custom_error(MigrationError::UnclaimedAlreadyWithdrawn),
     );
     assert_eq!(
-        fixture.token_balance(&fixture.vault_new_qx),
+        fixture.token_balance(&fixture.reserve_vault),
         reserve_after_first
     );
     assert_eq!(
-        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        fixture.token_balance(&fixture.refund_recipient_token_account),
         refund_after_first
     );
     assert_eq!(fixture.config().total_migrated, total_after_first);

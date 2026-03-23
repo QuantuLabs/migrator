@@ -27,11 +27,11 @@ pub struct MigrationConfig {
     pub vault_authority_bump: u8,
     pub paused: u8,
     pub admin: [u8; 32],
-    pub old_qx_mint: [u8; 32],
-    pub new_qx_mint: [u8; 32],
+    pub source_mint: [u8; 32],
+    pub destination_mint: [u8; 32],
     pub token_program_id: [u8; 32],
     pub vault_authority: [u8; 32],
-    pub vault_new_qx: [u8; 32],
+    pub reserve_vault: [u8; 32],
     pub total_migrated: u64,
     pub start_ts: i64,
     pub end_ts: i64,
@@ -39,7 +39,7 @@ pub struct MigrationConfig {
 }
 
 impl MigrationConfig {
-    pub const DISCRIMINATOR: [u8; 8] = *b"qxmigr01";
+    pub const DISCRIMINATOR: [u8; 8] = *b"migrtr01";
     pub const VERSION: u8 = 2;
     pub const SIZE: usize = size_of::<Self>();
     const MIGRATION_CAP_OFFSET: usize = 0;
@@ -409,11 +409,11 @@ mod verification {
             vault_authority_bump: kani::any(),
             paused: kani::any(),
             admin: kani::any(),
-            old_qx_mint: kani::any(),
-            new_qx_mint: kani::any(),
+            source_mint: kani::any(),
+            destination_mint: kani::any(),
             token_program_id: kani::any(),
             vault_authority: kani::any(),
-            vault_new_qx: kani::any(),
+            reserve_vault: kani::any(),
             total_migrated: kani::any(),
             start_ts: kani::any(),
             end_ts: kani::any(),
@@ -424,17 +424,17 @@ mod verification {
     #[kani::proof]
     fn migration_config_layout_is_stable() {
         assert_eq!(MigrationConfig::SIZE, 296);
-        assert_eq!(MigrationConfig::DISCRIMINATOR, *b"qxmigr01");
+        assert_eq!(MigrationConfig::DISCRIMINATOR, *b"migrtr01");
         assert_eq!(MigrationConfig::VERSION, 2);
         assert_eq!(core::mem::offset_of!(MigrationConfig, admin), 12);
-        assert_eq!(core::mem::offset_of!(MigrationConfig, old_qx_mint), 44);
-        assert_eq!(core::mem::offset_of!(MigrationConfig, new_qx_mint), 76);
+        assert_eq!(core::mem::offset_of!(MigrationConfig, source_mint), 44);
+        assert_eq!(core::mem::offset_of!(MigrationConfig, destination_mint), 76);
         assert_eq!(
             core::mem::offset_of!(MigrationConfig, token_program_id),
             108
         );
         assert_eq!(core::mem::offset_of!(MigrationConfig, vault_authority), 140);
-        assert_eq!(core::mem::offset_of!(MigrationConfig, vault_new_qx), 172);
+        assert_eq!(core::mem::offset_of!(MigrationConfig, reserve_vault), 172);
         assert_eq!(core::mem::offset_of!(MigrationConfig, total_migrated), 208);
         assert_eq!(core::mem::offset_of!(MigrationConfig, start_ts), 216);
         assert_eq!(core::mem::offset_of!(MigrationConfig, end_ts), 224);

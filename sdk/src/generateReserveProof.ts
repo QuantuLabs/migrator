@@ -131,7 +131,7 @@ export async function main() {
 
   if (!programIdArg || !newMintArg || !reserveVaultArg || !eligibleRawUnitsArg || !expectedDecimalsArg) {
     throw new Error(
-      "Usage: node src/generateReserveProof.ts <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]",
+      "Usage: node src/generateReserveProof.ts <PROGRAM_ID> <DESTINATION_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]",
     );
   }
 

@@ -11,7 +11,7 @@ export const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
 export const MIGRATION_CONFIG_SEED = Buffer.from("migration-config");
 export const VAULT_AUTHORITY_SEED = Buffer.from("vault-authority");
 
-export const MIGRATION_CONFIG_DISCRIMINATOR = Buffer.from("qxmigr01", "ascii");
+export const MIGRATION_CONFIG_DISCRIMINATOR = Buffer.from("migrtr01", "ascii");
 export const MIGRATION_CONFIG_SIZE = 296;
 export const MIGRATION_CONFIG_VERSION = 2;
 
@@ -21,11 +21,11 @@ export type MigrationConfig = {
   vaultAuthorityBump: number;
   paused: boolean;
   admin: PublicKey;
-  oldQxMint: PublicKey;
-  newQxMint: PublicKey;
+  sourceMint: PublicKey;
+  destinationMint: PublicKey;
   tokenProgramId: PublicKey;
   vaultAuthority: PublicKey;
-  vaultNewQx: PublicKey;
+  reserveVault: PublicKey;
   totalMigrated: bigint;
   migrationCap: bigint;
   refundRecipient: PublicKey;
@@ -93,9 +93,9 @@ export function buildInitializeConfigIx(params: {
   fundingNewTokenAccount: PublicKey;
   config: PublicKey;
   vaultAuthority: PublicKey;
-  vaultNewQx: PublicKey;
-  oldQxMint: PublicKey;
-  newQxMint: PublicKey;
+  reserveVault: PublicKey;
+  sourceMint: PublicKey;
+  destinationMint: PublicKey;
   programData: PublicKey;
   startTs: bigint;
   endTs: bigint;
@@ -110,9 +110,9 @@ export function buildInitializeConfigIx(params: {
       { pubkey: params.fundingNewTokenAccount, isSigner: false, isWritable: true },
       { pubkey: params.config, isSigner: false, isWritable: true },
       { pubkey: params.vaultAuthority, isSigner: false, isWritable: false },
-      { pubkey: params.vaultNewQx, isSigner: false, isWritable: true },
-      { pubkey: params.oldQxMint, isSigner: false, isWritable: false },
-      { pubkey: params.newQxMint, isSigner: false, isWritable: false },
+      { pubkey: params.reserveVault, isSigner: false, isWritable: true },
+      { pubkey: params.sourceMint, isSigner: false, isWritable: false },
+      { pubkey: params.destinationMint, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: params.programData, isSigner: false, isWritable: false },
@@ -142,11 +142,11 @@ export function buildMigrateExactIx(params: {
   user: PublicKey;
   config: PublicKey;
   vaultAuthority: PublicKey;
-  vaultNewQx: PublicKey;
+  reserveVault: PublicKey;
   userOldQx: PublicKey;
   userNewQx: PublicKey;
-  oldQxMint: PublicKey;
-  newQxMint: PublicKey;
+  sourceMint: PublicKey;
+  destinationMint: PublicKey;
   amountIn: bigint;
 }): TransactionInstruction {
   return new TransactionInstruction({
@@ -155,11 +155,11 @@ export function buildMigrateExactIx(params: {
       { pubkey: params.user, isSigner: true, isWritable: false },
       { pubkey: params.config, isSigner: false, isWritable: true },
       { pubkey: params.vaultAuthority, isSigner: false, isWritable: false },
-      { pubkey: params.vaultNewQx, isSigner: false, isWritable: true },
+      { pubkey: params.reserveVault, isSigner: false, isWritable: true },
       { pubkey: params.userOldQx, isSigner: false, isWritable: true },
       { pubkey: params.userNewQx, isSigner: false, isWritable: true },
-      { pubkey: params.oldQxMint, isSigner: false, isWritable: true },
-      { pubkey: params.newQxMint, isSigner: false, isWritable: false },
+      { pubkey: params.sourceMint, isSigner: false, isWritable: true },
+      { pubkey: params.destinationMint, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     data: encodeMigrateExactData(params.amountIn),
@@ -170,18 +170,18 @@ export function buildWithdrawUnclaimedIx(params: {
   programId: PublicKey;
   config: PublicKey;
   vaultAuthority: PublicKey;
-  vaultNewQx: PublicKey;
+  reserveVault: PublicKey;
   refundRecipientNewQx: PublicKey;
-  newQxMint: PublicKey;
+  destinationMint: PublicKey;
 }): TransactionInstruction {
   return new TransactionInstruction({
     programId: params.programId,
     keys: [
       { pubkey: params.config, isSigner: false, isWritable: true },
       { pubkey: params.vaultAuthority, isSigner: false, isWritable: false },
-      { pubkey: params.vaultNewQx, isSigner: false, isWritable: true },
+      { pubkey: params.reserveVault, isSigner: false, isWritable: true },
       { pubkey: params.refundRecipientNewQx, isSigner: false, isWritable: true },
-      { pubkey: params.newQxMint, isSigner: false, isWritable: false },
+      { pubkey: params.destinationMint, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
     data: encodeWithdrawUnclaimedData(),
@@ -205,11 +205,11 @@ export function decodeMigrationConfig(data: Buffer): MigrationConfig {
     vaultAuthorityBump: data[10],
     paused: data[11] !== 0,
     admin: new PublicKey(data.subarray(12, 44)),
-    oldQxMint: new PublicKey(data.subarray(44, 76)),
-    newQxMint: new PublicKey(data.subarray(76, 108)),
+    sourceMint: new PublicKey(data.subarray(44, 76)),
+    destinationMint: new PublicKey(data.subarray(76, 108)),
     tokenProgramId: new PublicKey(data.subarray(108, 140)),
     vaultAuthority: new PublicKey(data.subarray(140, 172)),
-    vaultNewQx: new PublicKey(data.subarray(172, 204)),
+    reserveVault: new PublicKey(data.subarray(172, 204)),
     totalMigrated: data.readBigUInt64LE(208),
     migrationCap: data.readBigUInt64LE(232),
     refundRecipient: new PublicKey(data.subarray(240, 272)),

@@ -21,11 +21,11 @@ use super::{assert_config_pda, assert_vault_authority_pda, now_ts, parse_u64_exa
 // 0. [signer] user
 // 1. [writable] config PDA
 // 2. [] vault authority PDA
-// 3. [writable] vault new QX token account
-// 4. [writable] user old QX token account
-// 5. [writable] user new QX token account
-// 6. [writable] old QX mint
-// 7. [] new QX mint
+// 3. [writable] vault destination token token account
+// 4. [writable] user source token token account
+// 5. [writable] user destination token token account
+// 6. [writable] source token mint
+// 7. [] destination token mint
 // 8. [] token program
 // Data: amount_in(u64)
 pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> ProgramResult {
@@ -34,7 +34,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         return Err(MigrationError::ZeroAmount.into());
     }
 
-    let [user, config_account, vault_authority, vault_new_qx, user_old_qx, user_new_qx, old_qx_mint, new_qx_mint, token_program, ..] =
+    let [user, config_account, vault_authority, reserve_vault, user_source_tokens, user_destination_tokens, source_mint, destination_mint, token_program, ..] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -62,30 +62,30 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         if config.vault_authority != *vault_authority.address().as_array() {
             return Err(MigrationError::InvalidVaultAuthority.into());
         }
-        if config.vault_new_qx != *vault_new_qx.address().as_array() {
+        if config.reserve_vault != *reserve_vault.address().as_array() {
             return Err(MigrationError::InvalidVault.into());
         }
-        if config.old_qx_mint != *old_qx_mint.address().as_array() {
+        if config.source_mint != *source_mint.address().as_array() {
             return Err(MigrationError::InvalidOldMint.into());
         }
-        if config.new_qx_mint != *new_qx_mint.address().as_array() {
+        if config.destination_mint != *destination_mint.address().as_array() {
             return Err(MigrationError::InvalidNewMint.into());
         }
 
-        let _ = validate_old_mint_account(old_qx_mint, &config.old_qx_mint)?;
-        let _ = validate_new_mint_account(new_qx_mint, &config.new_qx_mint)?;
+        let _ = validate_old_mint_account(source_mint, &config.source_mint)?;
+        let _ = validate_new_mint_account(destination_mint, &config.destination_mint)?;
         validate_migration_cap(config.total_migrated, amount_in, config.migration_cap())?;
         total_migrated_after = checked_total_migrated_after(config.total_migrated, amount_in)?;
 
         unsafe {
             validate_custody_token_account(
-                vault_new_qx,
-                &config.new_qx_mint,
+                reserve_vault,
+                &config.destination_mint,
                 &config.vault_authority,
             )?;
-            validate_token_account(user_old_qx, &config.old_qx_mint, user.address().as_array())?;
-            validate_destination_token_account(user_new_qx, user.address(), &config.new_qx_mint)?;
-            if token_amount(vault_new_qx)? < amount_in {
+            validate_token_account(user_source_tokens, &config.source_mint, user.address().as_array())?;
+            validate_destination_token_account(user_destination_tokens, user.address(), &config.destination_mint)?;
+            if token_amount(reserve_vault)? < amount_in {
                 return Err(MigrationError::InsufficientVaultLiquidity.into());
             }
         }
@@ -94,8 +94,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     }
 
     Burn {
-        account: user_old_qx,
-        mint: old_qx_mint,
+        account: user_source_tokens,
+        mint: source_mint,
         authority: user,
         amount: amount_in,
     }
@@ -109,8 +109,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     let vault_signer = Signer::from(&vault_seeds);
 
     Transfer {
-        from: vault_new_qx,
-        to: user_new_qx,
+        from: reserve_vault,
+        to: user_destination_tokens,
         authority: vault_authority,
         amount: amount_in,
     }

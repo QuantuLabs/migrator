@@ -34,11 +34,11 @@ export type ConfigReport = {
     vaultAuthorityBump: number;
     paused: boolean;
     admin: string;
-    oldQxMint: string;
-    newQxMint: string;
+    sourceMint: string;
+    destinationMint: string;
     tokenProgramId: string;
     vaultAuthority: string;
-    vaultNewQx: string;
+    reserveVault: string;
     totalMigrated: string;
     migrationCap: string;
     refundRecipient: string;
@@ -108,12 +108,12 @@ export function buildConfigReport(params: {
   const config = decodeMigrationConfig(params.info.data);
   const checks = {
     configOwnedByProgram: params.info.owner.equals(params.programId),
-    oldMintMatches: config.oldQxMint.equals(params.oldMint),
-    newMintMatches: config.newQxMint.equals(params.newMint),
+    oldMintMatches: config.sourceMint.equals(params.oldMint),
+    newMintMatches: config.destinationMint.equals(params.newMint),
     tokenProgramMatches: config.tokenProgramId.equals(TOKEN_PROGRAM_ID),
     adminMatches: config.admin.equals(params.opsAdmin),
     vaultAuthorityMatches: config.vaultAuthority.equals(params.vaultAuthority),
-    reserveVaultMatches: config.vaultNewQx.equals(params.reserveVault),
+    reserveVaultMatches: config.reserveVault.equals(params.reserveVault),
     configBumpMatches: config.bump === params.configBump,
     vaultAuthorityBumpMatches: config.vaultAuthorityBump === params.vaultAuthorityBump,
     migrationCapMatches: config.migrationCap === params.migrationCap,
@@ -151,11 +151,11 @@ export function buildConfigReport(params: {
       vaultAuthorityBump: config.vaultAuthorityBump,
       paused: config.paused,
       admin: config.admin.toBase58(),
-      oldQxMint: config.oldQxMint.toBase58(),
-      newQxMint: config.newQxMint.toBase58(),
+      sourceMint: config.sourceMint.toBase58(),
+      destinationMint: config.destinationMint.toBase58(),
       tokenProgramId: config.tokenProgramId.toBase58(),
       vaultAuthority: config.vaultAuthority.toBase58(),
-      vaultNewQx: config.vaultNewQx.toBase58(),
+      reserveVault: config.reserveVault.toBase58(),
       totalMigrated: config.totalMigrated.toString(),
       migrationCap: config.migrationCap.toString(),
       refundRecipient: config.refundRecipient.toBase58(),
@@ -249,7 +249,7 @@ export async function main() {
     unclaimedWithdrawnArg === undefined
   ) {
     throw new Error(
-      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW> <REFUND_RECIPIENT> <UNCLAIMED_WITHDRAWN:true|false>",
+      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <SOURCE_MINT> <DESTINATION_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW> <REFUND_RECIPIENT> <UNCLAIMED_WITHDRAWN:true|false>",
     );
   }
 

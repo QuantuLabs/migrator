@@ -15,17 +15,15 @@ Token policy:
 - V1 is `Tokenkeg` only
 - V1 does not support `Token-2022`
 
-Naming note:
+Naming:
 
-- V1 keeps historical on-chain field names such as `old_qx_mint` and `new_qx_mint`
-  for binary compatibility, even though this document describes them generically
-  as source and destination mints.
+- V1 uses generic on-chain field names such as `source_mint` and `destination_mint`.
 
 ## Fixed V1 Decisions
 
 1. Ratio is fixed at `1:1`.
 2. V1 supports `Tokenkeg` only.
-3. `user_new_qx` ATA must already exist when `migrate_exact` is called.
+3. `user_destination_tokens` ATA must already exist when `migrate_exact` is called.
 4. Reserve is held in a token account owned by a PDA controlled by the program.
 5. No per-user migration account is stored on-chain in V1.
 6. Snapshot is off-chain audit data only.
@@ -177,10 +175,10 @@ Required checks:
 - `config.unclaimed_withdrawn == false`
 - config PDA and vault PDA seeds re-derive on-chain
 - token program matches config and approved `Tokenkeg`
-- reserve vault account equals `config.vault_new_qx`
+- reserve vault account equals `config.reserve_vault`
 - reserve vault owner equals vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
-- destination mint matches `config.new_qx_mint`
+- destination mint matches `config.destination_mint`
 - destination account owner equals the configured `refund_recipient`
 - destination account mint equals the destination token
 - destination account address equals the canonical ATA for `(refund_recipient, destination mint)`
@@ -215,11 +213,11 @@ Padding note:
 | vault_authority_bump | `u8` |
 | paused | `u8` |
 | admin | `[u8; 32]` |
-| old_qx_mint | `[u8; 32]` |
-| new_qx_mint | `[u8; 32]` |
+| source_mint | `[u8; 32]` |
+| destination_mint | `[u8; 32]` |
 | token_program_id | `[u8; 32]` |
 | vault_authority | `[u8; 32]` |
-| vault_new_qx | `[u8; 32]` |
+| reserve_vault | `[u8; 32]` |
 | total_migrated | `u64` |
 | start_ts | `i64` |
 | end_ts | `i64` |
@@ -227,9 +225,9 @@ Padding note:
 
 ## Invariants
 
-1. `config.old_qx_mint` never changes after init.
-2. `config.new_qx_mint` never changes after init.
-3. `config.vault_new_qx` never changes after init.
+1. `config.source_mint` never changes after init.
+2. `config.destination_mint` never changes after init.
+3. `config.reserve_vault` never changes after init.
 4. `total_migrated` is monotonic.
 5. `total_migrated <= migration_cap`.
 6. Program never mints the destination token; it only transfers from a reserve funded during `initialize_config`.
@@ -265,8 +263,8 @@ Initial discriminator map:
 
 ## Ops Notes
 
-- `funding_authority` and `funding_new_qx` should be reviewed before public launch
-- `vault_new_qx` should be empty before `initialize_config`
+- `funding_authority` and `funding_token_account` should be reviewed before public launch
+- `reserve_vault` should be empty before `initialize_config`
 - `migration_cap` should equal the approved migration total for the open live-holder window
 - the refund destination for unclaimed funds is fixed in config; in V1 that is `funding_authority`
 - if any legacy balances are intentionally excluded, they must be operationally locked or removed before launch; V1 does not enforce wallet-level eligibility on-chain
@@ -277,4 +275,4 @@ Initial discriminator map:
   - reserve vault address
   - old mint
   - new mint
-- UI should auto-create `user_new_qx` ATA before calling `migrate_exact`
+- UI should auto-create `user_destination_tokens` ATA before calling `migrate_exact`
