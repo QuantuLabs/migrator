@@ -23,6 +23,7 @@ Fill the real values for:
 - old mint
 - new mint
 - reserve vault
+- at least one secondary RPC URL for quorum replay in the manifest itself
 - ops admin
 - initializer authority
 - expected upgrade authority
@@ -38,6 +39,20 @@ Run:
 
 ```bash
 ./scripts/run-mainnet-dry-run.sh release/mainnet-inputs.local.json
+```
+
+For release sign-off, replay the same reviewed manifest across at least two
+independent RPCs:
+
+```bash
+./scripts/run-mainnet-dry-run-quorum.sh release/mainnet-inputs.local.json
+```
+
+Optional override:
+
+```bash
+DRY_RUN_RPC_URLS="https://rpc-2.example,https://rpc-3.example" \
+./scripts/run-mainnet-dry-run-quorum.sh release/mainnet-inputs.local.json
 ```
 
 This validates:
@@ -60,6 +75,23 @@ This validates:
 - exact post-init config state if `expectConfigInitialized=true`, including `startTs`, `endTs`, `paused`, and `totalMigrated`
 - optional funding signature success/finalization plus reserve-vault/mint touch when one is recorded in the manifest
 
+## Quorum Replay
+
+For release sign-off, rerun the same reviewed manifest against at least one
+second independent mainnet RPC:
+
+```bash
+DRY_RUN_RPC_URLS="https://rpc-2.example,https://rpc-3.example" \
+./scripts/run-mainnet-dry-run-quorum.sh release/mainnet-inputs.local.json
+```
+
+Rules:
+
+- the manifest `rpcUrl` is always used as the first provider
+- the manifest `secondaryRpcUrls` list is part of the reviewed release record
+- `DRY_RUN_RPC_URLS` is an optional override/addition for independent replay
+- release sign-off requires all providers to return exit `0`
+
 ## Phase Usage
 
 Pre-init:
@@ -77,3 +109,9 @@ Post-init:
 
 Do not send the mainnet init transaction unless the dry-run validator returns
 exit `0` on the exact reviewed manifest.
+
+For final approval:
+
+- require `run-mainnet-dry-run.sh` to pass on the primary reviewed RPC
+- require `run-mainnet-dry-run-quorum.sh` to pass across at least two independent RPC providers
+- treat any report mismatch as a release blocker until resolved

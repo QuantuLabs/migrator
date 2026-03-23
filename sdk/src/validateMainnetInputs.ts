@@ -46,6 +46,7 @@ export type VerifiedBuildInputs = {
 export type MainnetInputs = {
   cluster: string;
   rpcUrl: string;
+  secondaryRpcUrls?: string[];
   expectConfigInitialized: boolean;
   programId: string;
   oldQxMint: string;
@@ -103,6 +104,17 @@ function asInteger(value: unknown, label: string): number {
   return value;
 }
 
+function asOptionalStringArray(value: unknown, label: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be an array of non-empty strings`);
+  }
+
+  return value.map((entry, index) => asString(entry, `${label}[${index}]`));
+}
+
 export function parseInputs(raw: unknown): MainnetInputs {
   const record = asRecord(raw, "mainnet inputs");
   const verifiedBuild = asRecord(record.verifiedBuild, "verifiedBuild");
@@ -110,6 +122,7 @@ export function parseInputs(raw: unknown): MainnetInputs {
   return {
     cluster: asString(record.cluster, "cluster"),
     rpcUrl: asString(record.rpcUrl, "rpcUrl"),
+    secondaryRpcUrls: asOptionalStringArray(record.secondaryRpcUrls, "secondaryRpcUrls"),
     expectConfigInitialized: asBoolean(
       record.expectConfigInitialized,
       "expectConfigInitialized",
@@ -375,6 +388,28 @@ export async function main() {
   const commitment = resolveCommitment();
   const connection = new Connection(process.env.SOLANA_RPC_URL || inputs.rpcUrl, commitment);
 
+  const report = await validateMainnetInputsReport({
+    inputsPath,
+    inputs,
+    commitment,
+    connection,
+  });
+
+  console.log(JSON.stringify(report, null, 2));
+
+  if (!report.ok) {
+    process.exit(1);
+  }
+}
+
+export async function validateMainnetInputsReport(params: {
+  inputsPath: string;
+  inputs: MainnetInputs;
+  commitment: Commitment;
+  connection: Connection;
+}) {
+  const { inputsPath, inputs, commitment, connection } = params;
+
   const programId = new PublicKey(inputs.programId);
   const oldQxMint = new PublicKey(inputs.oldQxMint);
   const newQxMint = new PublicKey(inputs.newQxMint);
@@ -537,89 +572,79 @@ export async function main() {
   });
   const ok = Object.values(checks).every((value) => value !== false);
 
-  console.log(
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString(),
-        inputsPath,
-        rpcUrl: connection.rpcEndpoint,
-        commitment,
-        slot,
-        accountSnapshotSlot: slot,
-        phase: inputs.expectConfigInitialized ? "post-init" : "pre-init",
-        inputs: {
-          cluster: inputs.cluster,
-          programId: programId.toBase58(),
-          oldQxMint: oldQxMint.toBase58(),
-          newQxMint: newQxMint.toBase58(),
-          reserveVault: reserveVault.toBase58(),
-          opsAdmin: opsAdmin.toBase58(),
-          initializerAuthority: initializerAuthority.toBase58(),
-          expectedUpgradeAuthority,
-          migrationCapRaw: migrationCapRaw.toString(),
-          eligibleRawUnits: eligibleRawUnits.toString(),
-          expectedDecimals: inputs.expectedDecimals,
-          startTs: startTs.toString(),
-          endTs: endTs.toString(),
-          expectedPaused: inputs.expectedPaused,
-          expectedTotalMigratedRaw: expectedTotalMigratedRaw.toString(),
-          fundingSignature: inputs.fundingSignature,
-          verifiedBuild: inputs.verifiedBuild,
-        },
-        derived: {
-          configPda: configPda.toBase58(),
-          vaultAuthorityPda: vaultAuthorityPda.toBase58(),
-          programDataPda: programDataPda.toBase58(),
-          configBump,
-          vaultAuthorityBump,
-        },
-        observed: {
-          genesisHash: observedGenesisHash,
-          programDataAddressFromProgram: parsedProgram.programDataAddress,
-          oldMintSupplyRaw: parsedOldMint.supply.toString(),
-          oldMintDecimals: parsedOldMint.decimals,
-          programDataAuthority: parsedProgramData.authority,
-          verifiedBuildExecutableHash: executableHash,
-          reviewedBuildInfoPath: resolvedBuildInfoPath,
-          reviewedBuildInfo,
-          verifiedBuildResolvedMountPath: resolvedMountPath,
-          verifiedBuildResolvedProgramSoPath: resolvedProgramSoPath,
-          mintSupplyRaw: parsedMint.supply.toString(),
-          mintDecimals: parsedMint.decimals,
-          reserveRawUnits: parsedReserve.amount.toString(),
-          reserveShortfallRawUnits:
-            parsedReserve.amount >= eligibleRawUnits
-              ? "0"
-              : (eligibleRawUnits - parsedReserve.amount).toString(),
-          fundingSignatureStatus: fundingStatus,
-          fundingSignatureObservation: fundingObservation,
-          config:
-            parsedConfig === null
-              ? null
-              : {
-                  admin: parsedConfig.admin.toBase58(),
-                  oldQxMint: parsedConfig.oldQxMint.toBase58(),
-                  newQxMint: parsedConfig.newQxMint.toBase58(),
-                  tokenProgramId: parsedConfig.tokenProgramId.toBase58(),
-                  vaultAuthority: parsedConfig.vaultAuthority.toBase58(),
-                  vaultNewQx: parsedConfig.vaultNewQx.toBase58(),
-                  totalMigrated: parsedConfig.totalMigrated.toString(),
-                  migrationCap: parsedConfig.migrationCap.toString(),
-                  startTs: parsedConfig.startTs.toString(),
-                  endTs: parsedConfig.endTs.toString(),
-                },
-        },
-        checks,
-        ok,
-      },
-      null,
-      2,
-    ),
-  );
-
-  if (!ok) {
-    process.exit(1);
-  }
+  return {
+    generatedAt: new Date().toISOString(),
+    inputsPath,
+    rpcUrl: connection.rpcEndpoint,
+    commitment,
+    slot,
+    accountSnapshotSlot: slot,
+    phase: inputs.expectConfigInitialized ? "post-init" : "pre-init",
+    inputs: {
+      cluster: inputs.cluster,
+      programId: programId.toBase58(),
+      oldQxMint: oldQxMint.toBase58(),
+      newQxMint: newQxMint.toBase58(),
+      reserveVault: reserveVault.toBase58(),
+      opsAdmin: opsAdmin.toBase58(),
+      initializerAuthority: initializerAuthority.toBase58(),
+      expectedUpgradeAuthority,
+      migrationCapRaw: migrationCapRaw.toString(),
+      eligibleRawUnits: eligibleRawUnits.toString(),
+      expectedDecimals: inputs.expectedDecimals,
+      startTs: startTs.toString(),
+      endTs: endTs.toString(),
+      expectedPaused: inputs.expectedPaused,
+      expectedTotalMigratedRaw: expectedTotalMigratedRaw.toString(),
+      fundingSignature: inputs.fundingSignature,
+      verifiedBuild: inputs.verifiedBuild,
+    },
+    derived: {
+      configPda: configPda.toBase58(),
+      vaultAuthorityPda: vaultAuthorityPda.toBase58(),
+      programDataPda: programDataPda.toBase58(),
+      configBump,
+      vaultAuthorityBump,
+    },
+    observed: {
+      genesisHash: observedGenesisHash,
+      programDataAddressFromProgram: parsedProgram.programDataAddress,
+      oldMintSupplyRaw: parsedOldMint.supply.toString(),
+      oldMintDecimals: parsedOldMint.decimals,
+      programDataAuthority: parsedProgramData.authority,
+      verifiedBuildExecutableHash: executableHash,
+      reviewedBuildInfoPath: resolvedBuildInfoPath,
+      reviewedBuildInfo,
+      verifiedBuildResolvedMountPath: resolvedMountPath,
+      verifiedBuildResolvedProgramSoPath: resolvedProgramSoPath,
+      mintSupplyRaw: parsedMint.supply.toString(),
+      mintDecimals: parsedMint.decimals,
+      reserveRawUnits: parsedReserve.amount.toString(),
+      reserveShortfallRawUnits:
+        parsedReserve.amount >= eligibleRawUnits
+          ? "0"
+          : (eligibleRawUnits - parsedReserve.amount).toString(),
+      fundingSignatureStatus: fundingStatus,
+      fundingSignatureObservation: fundingObservation,
+      config:
+        parsedConfig === null
+          ? null
+          : {
+              admin: parsedConfig.admin.toBase58(),
+              oldQxMint: parsedConfig.oldQxMint.toBase58(),
+              newQxMint: parsedConfig.newQxMint.toBase58(),
+              tokenProgramId: parsedConfig.tokenProgramId.toBase58(),
+              vaultAuthority: parsedConfig.vaultAuthority.toBase58(),
+              vaultNewQx: parsedConfig.vaultNewQx.toBase58(),
+              totalMigrated: parsedConfig.totalMigrated.toString(),
+              migrationCap: parsedConfig.migrationCap.toString(),
+              startTs: parsedConfig.startTs.toString(),
+              endTs: parsedConfig.endTs.toString(),
+            },
+    },
+    checks,
+    ok,
+  };
 }
 
 void runCliMain(import.meta.url, main);

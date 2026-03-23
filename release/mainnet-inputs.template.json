@@ -1,6 +1,9 @@
 {
   "cluster": "mainnet-beta",
   "rpcUrl": "https://api.mainnet-beta.solana.com",
+  "secondaryRpcUrls": [
+    "REPLACE_SECOND_RPC_URL"
+  ],
   "expectConfigInitialized": false,
   "programId": "REPLACE_PROGRAM_ID",
   "oldQxMint": "REPLACE_OLD_QX_MINT",

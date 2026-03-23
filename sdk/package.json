@@ -13,7 +13,8 @@
     "verify-config": "node --experimental-strip-types src/verifyConfig.ts",
     "verify-program-authority": "node --experimental-strip-types src/verifyProgramAuthority.ts",
     "reserve-proof": "node --experimental-strip-types src/generateReserveProof.ts",
-    "validate-mainnet-inputs": "node --experimental-strip-types src/validateMainnetInputs.ts"
+    "validate-mainnet-inputs": "node --experimental-strip-types src/validateMainnetInputs.ts",
+    "validate-mainnet-inputs-quorum": "node --experimental-strip-types src/validateMainnetInputsQuorum.ts"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.2"

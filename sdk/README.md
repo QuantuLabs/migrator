@@ -22,6 +22,7 @@ Implemented in:
 - `sdk/src/verifyProgramAuthority.ts`
 - `sdk/src/generateReserveProof.ts`
 - `sdk/src/validateMainnetInputs.ts`
+- `sdk/src/validateMainnetInputsQuorum.ts`
 
 Expected functions:
 
@@ -51,6 +52,7 @@ npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT
 npm run verify-program-authority -- <PROGRAM_ID> <EXPECTED_AUTHORITY|none>
 npm run reserve-proof -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]
 npm run validate-mainnet-inputs -- <PATH_TO_MAINNET_INPUTS_JSON>
+npm run validate-mainnet-inputs-quorum -- <PATH_TO_MAINNET_INPUTS_JSON>
 ```
 
 All verification commands are hard gates:
@@ -68,3 +70,11 @@ All verification commands are hard gates:
 - config PDA absence before init and exact config field matches after init, including `startTs`, `endTs`, `paused`, and `totalMigrated`
 - reserve sufficiency against the reviewed eligible raw-unit total
 - optional funding-signature success/finalization plus proof that the signature touched the reviewed reserve vault and mint when one is recorded in the manifest
+
+`validate-mainnet-inputs-quorum` is intended for the multi-RPC quorum lane:
+
+- replay the same reviewed manifest across at least two RPC providers
+- take the primary RPC from the manifest and the remaining providers from `secondaryRpcUrls`, with optional `DRY_RUN_RPC_URLS` overrides
+- ignore provider-specific fields like `rpcUrl`, `slot`, and `generatedAt`
+- require all critical checks and observed state to match across providers
+- exit nonzero on any mismatch
