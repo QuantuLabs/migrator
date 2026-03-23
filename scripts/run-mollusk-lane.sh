@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROGRAM_MANIFEST="$ROOT_DIR/programs/migrator-program/Cargo.toml"
+PROGRAM_MANIFEST="$ROOT_DIR/programs/migrator/Cargo.toml"
 SBF_OUT_DIR="${SBF_OUT_DIR:-$ROOT_DIR/target/deploy}"
 
 echo "[mollusk] building SBF artifact into $SBF_OUT_DIR"

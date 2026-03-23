@@ -40,7 +40,7 @@ pub struct MigrationConfig {
 
 impl MigrationConfig {
     pub const DISCRIMINATOR: [u8; 8] = *b"qxmigr01";
-    pub const VERSION: u8 = 1;
+    pub const VERSION: u8 = 2;
     pub const SIZE: usize = size_of::<Self>();
     const MIGRATION_CAP_OFFSET: usize = 0;
     const REFUND_RECIPIENT_OFFSET: usize = 8;
@@ -425,7 +425,7 @@ mod verification {
     fn migration_config_layout_is_stable() {
         assert_eq!(MigrationConfig::SIZE, 296);
         assert_eq!(MigrationConfig::DISCRIMINATOR, *b"qxmigr01");
-        assert_eq!(MigrationConfig::VERSION, 1);
+        assert_eq!(MigrationConfig::VERSION, 2);
         assert_eq!(core::mem::offset_of!(MigrationConfig, admin), 12);
         assert_eq!(core::mem::offset_of!(MigrationConfig, old_qx_mint), 44);
         assert_eq!(core::mem::offset_of!(MigrationConfig, new_qx_mint), 76);

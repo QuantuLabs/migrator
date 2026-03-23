@@ -8,6 +8,7 @@ import {
   BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
   MIGRATION_CONFIG_DISCRIMINATOR,
   MIGRATION_CONFIG_SIZE,
+  MIGRATION_CONFIG_VERSION,
   TOKEN_PROGRAM_ID,
 } from "./index.ts";
 import { buildConfigReport } from "./verifyConfig.ts";
@@ -65,7 +66,7 @@ function makeConfigData(params: {
 }): Buffer {
   const data = Buffer.alloc(MIGRATION_CONFIG_SIZE);
   MIGRATION_CONFIG_DISCRIMINATOR.copy(data, 0);
-  data[8] = 1;
+  data[8] = MIGRATION_CONFIG_VERSION;
   data[9] = params.bump;
   data[10] = params.vaultAuthorityBump;
   data[11] = params.paused ? 1 : 0;

@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use migrator_program::{
+use migrator::{
     errors::MigrationError, state::MigrationConfig, ASSOCIATED_TOKEN_PROGRAM_ID,
     MIGRATION_CONFIG_SEED, TOKEN_PROGRAM_ID, UPGRADEABLE_LOADER_PROGRAM_ID, VAULT_AUTHORITY_SEED,
 };
@@ -43,13 +43,15 @@ const MIGRATION_CAP: u64 = INITIAL_USER_OLD_BALANCE;
 const INITIAL_RESERVE: u64 = MIGRATION_CAP;
 
 fn resolve_sbf_out_dir() -> Option<PathBuf> {
-    if let Ok(path) = env::var("MIGRATOR_PROGRAM_SBF_PATH") {
+    if let Ok(path) =
+        env::var("MIGRATOR_SBF_PATH").or_else(|_| env::var("MIGRATOR_PROGRAM_SBF_PATH"))
+    {
         let p = PathBuf::from(path);
         if p.exists() {
             return p.parent().map(PathBuf::from);
         }
         eprintln!(
-            "[mollusk_fuzz_lane] MIGRATOR_PROGRAM_SBF_PATH set but file missing: {}",
+            "[mollusk_fuzz_lane] MIGRATOR_SBF_PATH set but file missing: {}",
             p.display()
         );
     }
@@ -58,7 +60,7 @@ fn resolve_sbf_out_dir() -> Option<PathBuf> {
         .join("../../target/deploy")
         .canonicalize()
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/deploy"));
-    let fallback_artifact = fallback_dir.join("migrator_program.so");
+    let fallback_artifact = fallback_dir.join("migrator.so");
 
     if fallback_artifact.exists() {
         Some(fallback_dir)
@@ -72,17 +74,17 @@ fn setup_mollusk(program_id: &Pubkey) -> Option<Mollusk> {
     let Some(sbf_out_dir) = resolve_sbf_out_dir() else {
         if require_artifact {
             panic!(
-                "[mollusk_fuzz_lane] required SBF artifact missing. Build target/deploy/migrator_program.so or set MIGRATOR_PROGRAM_SBF_PATH"
+                "[mollusk_fuzz_lane] required SBF artifact missing. Build target/deploy/migrator.so or set MIGRATOR_SBF_PATH"
             );
         }
         eprintln!(
-            "[mollusk_fuzz_lane] skip: no program artifact found. Build target/deploy/migrator_program.so or set MIGRATOR_PROGRAM_SBF_PATH"
+            "[mollusk_fuzz_lane] skip: no program artifact found. Build target/deploy/migrator.so or set MIGRATOR_SBF_PATH"
         );
         return None;
     };
 
     env::set_var("SBF_OUT_DIR", &sbf_out_dir);
-    let mut mollusk = Mollusk::new(program_id, "migrator_program");
+    let mut mollusk = Mollusk::new(program_id, "migrator");
     mollusk.add_program_with_loader_and_elf(
         &Pubkey::new_from_array(TOKEN_PROGRAM_ID),
         &loader_keys::LOADER_V2,
@@ -207,6 +209,25 @@ fn set_config_window_in_accounts(
     config.start_ts = start_ts;
     config.end_ts = end_ts;
     config_account.data = migration_config_to_bytes(&config);
+}
+
+fn set_token_account_controls_in_accounts(
+    accounts: &mut [(Pubkey, Account)],
+    token_account: &Pubkey,
+    delegate_option: u32,
+    delegated_amount: u64,
+    close_authority_option: u32,
+    is_native_option: u32,
+) {
+    let target = accounts
+        .iter_mut()
+        .find(|(key, _)| key == token_account)
+        .map(|(_, account)| account)
+        .expect("token account should be present");
+    target.data[72..76].copy_from_slice(&delegate_option.to_le_bytes());
+    target.data[109..113].copy_from_slice(&is_native_option.to_le_bytes());
+    target.data[121..129].copy_from_slice(&delegated_amount.to_le_bytes());
+    target.data[129..133].copy_from_slice(&close_authority_option.to_le_bytes());
 }
 
 fn migration_error(error: MigrationError) -> ProgramError {
@@ -350,7 +371,10 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
     let accounts = vec![
         (initializer, Account::new(2_000_000_000, 0, &system_program)),
         (ops_admin, Account::new(1_000_000_000, 0, &system_program)),
-        (funding_authority, Account::new(1_000_000_000, 0, &system_program)),
+        (
+            funding_authority,
+            Account::new(1_000_000_000, 0, &system_program),
+        ),
         (user, Account::new(1_000_000_000, 0, &system_program)),
         (config_pda, Account::default()),
         (vault_authority_pda, Account::new(1_000_000, 0, &program_id)),
@@ -497,7 +521,10 @@ fn base_accounts_for_real_spl_bootstrap(program_id: Pubkey) -> FixtureAccounts {
     let accounts = vec![
         (initializer, Account::new(2_000_000_000, 0, &system_program)),
         (ops_admin, Account::new(1_000_000_000, 0, &system_program)),
-        (funding_authority, Account::new(1_000_000_000, 0, &system_program)),
+        (
+            funding_authority,
+            Account::new(1_000_000_000, 0, &system_program),
+        ),
         (user, Account::new(1_000_000_000, 0, &system_program)),
         (config_pda, Account::default()),
         (vault_authority_pda, Account::new(1_000_000, 0, &program_id)),
@@ -623,11 +650,26 @@ fn mollusk_initialize_config_binds_expected_state_and_cap() {
     assert_eq!(config.vault_new_qx, *fixture.vault_new_qx.as_array());
     assert_eq!(config.total_migrated, 0);
     assert_eq!(config.migration_cap(), MIGRATION_CAP);
-    assert_eq!(config.refund_recipient(), *fixture.funding_authority.as_array());
+    assert_eq!(
+        config.refund_recipient(),
+        *fixture.funding_authority.as_array()
+    );
     assert_eq!(config.start_ts, 0);
     assert_eq!(config.end_ts, i64::MAX);
-    assert_eq!(token_amount(account_by_key(&result.resulting_accounts, &fixture.funding_new_qx)), 0);
-    assert_eq!(token_amount(account_by_key(&result.resulting_accounts, &fixture.vault_new_qx)), MIGRATION_CAP);
+    assert_eq!(
+        token_amount(account_by_key(
+            &result.resulting_accounts,
+            &fixture.funding_new_qx
+        )),
+        0
+    );
+    assert_eq!(
+        token_amount(account_by_key(
+            &result.resulting_accounts,
+            &fixture.vault_new_qx
+        )),
+        MIGRATION_CAP
+    );
 }
 
 #[test]
@@ -1130,6 +1172,111 @@ fn mollusk_withdraw_unclaimed_rejects_when_paused_after_expiry() {
         migration_config_from_bytes(account_by_key(&closeout_accounts, &fixture.config_pda).data());
     assert_eq!(config.total_migrated, MIGRATION_AMOUNT);
     assert_eq!(config.paused, 1);
+    assert!(!config.unclaimed_withdrawn());
+}
+
+#[test]
+fn mollusk_withdraw_unclaimed_rejects_wrong_token_program() {
+    let program_id = Pubkey::new_unique();
+    let Some(mollusk) = setup_mollusk(&program_id) else {
+        return;
+    };
+
+    let fixture = base_accounts(program_id);
+    let init_accounts = process_instruction(
+        &mollusk,
+        &fixture.initialize_config_ix(-1, -1, MIGRATION_CAP),
+        &fixture.accounts,
+        &[Check::success()],
+    );
+
+    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.vault_new_qx));
+    let refund_before = token_amount(account_by_key(
+        &init_accounts,
+        &fixture.refund_recipient_new_qx,
+    ));
+
+    let mut ix = fixture.withdraw_unclaimed_ix();
+    ix.accounts[5] = AccountMeta::new_readonly(fixture.system_program, false);
+
+    let closeout_accounts = process_instruction(
+        &mollusk,
+        &ix,
+        &init_accounts,
+        &[Check::err(migration_error(
+            MigrationError::InvalidTokenProgram,
+        ))],
+    );
+
+    assert_eq!(
+        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        reserve_before
+    );
+    assert_eq!(
+        token_amount(account_by_key(
+            &closeout_accounts,
+            &fixture.refund_recipient_new_qx
+        )),
+        refund_before
+    );
+    let config =
+        migration_config_from_bytes(account_by_key(&closeout_accounts, &fixture.config_pda).data());
+    assert_eq!(config.total_migrated, 0);
+    assert!(!config.unclaimed_withdrawn());
+}
+
+#[test]
+fn mollusk_withdraw_unclaimed_rejects_refund_ata_delegate_controls() {
+    let program_id = Pubkey::new_unique();
+    let Some(mollusk) = setup_mollusk(&program_id) else {
+        return;
+    };
+
+    let fixture = base_accounts(program_id);
+    let mut init_accounts = process_instruction(
+        &mollusk,
+        &fixture.initialize_config_ix(-1, -1, MIGRATION_CAP),
+        &fixture.accounts,
+        &[Check::success()],
+    );
+    set_token_account_controls_in_accounts(
+        &mut init_accounts,
+        &fixture.refund_recipient_new_qx,
+        1,
+        1,
+        0,
+        0,
+    );
+
+    let reserve_before = token_amount(account_by_key(&init_accounts, &fixture.vault_new_qx));
+    let refund_before = token_amount(account_by_key(
+        &init_accounts,
+        &fixture.refund_recipient_new_qx,
+    ));
+
+    let closeout_accounts = process_instruction(
+        &mollusk,
+        &fixture.withdraw_unclaimed_ix(),
+        &init_accounts,
+        &[Check::err(migration_error(
+            MigrationError::InvalidTokenAccountControls,
+        ))],
+    );
+
+    assert_eq!(
+        token_amount(account_by_key(&closeout_accounts, &fixture.vault_new_qx)),
+        reserve_before
+    );
+    assert_eq!(
+        token_amount(account_by_key(
+            &closeout_accounts,
+            &fixture.refund_recipient_new_qx
+        )),
+        refund_before
+    );
+    let config =
+        migration_config_from_bytes(account_by_key(&closeout_accounts, &fixture.config_pda).data());
+    assert_eq!(config.total_migrated, 0);
     assert!(!config.unclaimed_withdrawn());
 }
 

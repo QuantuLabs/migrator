@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 MOUNT_BASE_DIR="$(dirname "$ROOT_DIR")"
-LIBRARY_NAME="${LIBRARY_NAME:-migrator_program}"
+LIBRARY_NAME="${LIBRARY_NAME:-migrator}"
 ARCH="${SOLANA_VERIFY_ARCH:-v0}"
 OUT_DIR="${VERIFIED_BUILD_OUT_DIR:-$ROOT_DIR/artifacts/verified-build}"
 MOUNT_LINK_NAME="${VERIFIED_BUILD_MOUNT_LINK_NAME:-svbmount}"

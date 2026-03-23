@@ -13,7 +13,7 @@ export const VAULT_AUTHORITY_SEED = Buffer.from("vault-authority");
 
 export const MIGRATION_CONFIG_DISCRIMINATOR = Buffer.from("qxmigr01", "ascii");
 export const MIGRATION_CONFIG_SIZE = 296;
-export const MIGRATION_CONFIG_VERSION = 1;
+export const MIGRATION_CONFIG_VERSION = 2;
 
 export type MigrationConfig = {
   version: number;

@@ -1,7 +1,7 @@
 use std::{env, mem::size_of, path::PathBuf};
 
 use litesvm::{types::TransactionResult, LiteSVM};
-use migrator_program::{
+use migrator::{
     errors::MigrationError,
     state::{encode_migration_config_bytes, MigrationConfig},
     ASSOCIATED_TOKEN_PROGRAM_ID, MIGRATION_CONFIG_SEED, TOKEN_PROGRAM_ID,
@@ -32,23 +32,24 @@ const MIGRATION_CAP: u64 = INITIAL_USER_OLD_BALANCE;
 const INITIAL_RESERVE: u64 = MIGRATION_CAP;
 
 fn resolve_program_path() -> Option<PathBuf> {
-    if let Ok(path) = env::var("MIGRATOR_PROGRAM_SBF_PATH") {
+    if let Ok(path) =
+        env::var("MIGRATOR_SBF_PATH").or_else(|_| env::var("MIGRATOR_PROGRAM_SBF_PATH"))
+    {
         let p = PathBuf::from(path);
         if p.exists() {
             return Some(p);
         }
         eprintln!(
-            "[litesvm_migration_flow] MIGRATOR_PROGRAM_SBF_PATH set but file missing: {}",
+            "[litesvm_migration_flow] MIGRATOR_SBF_PATH set but file missing: {}",
             p.display()
         );
     }
 
     let fallback = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/deploy/migrator_program.so")
+        .join("../../target/deploy/migrator.so")
         .canonicalize()
         .unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/deploy/migrator_program.so")
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/deploy/migrator.so")
         });
 
     if fallback.exists() {
@@ -154,11 +155,11 @@ impl MigrationFlowFixture {
         let Some(program_path) = resolve_program_path() else {
             if require_artifact {
                 panic!(
-                    "[litesvm_migration_flow] required SBF artifact missing. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
+                    "[litesvm_migration_flow] required SBF artifact missing. Set MIGRATOR_SBF_PATH or build target/deploy/migrator.so"
                 );
             }
             eprintln!(
-                "[litesvm_migration_flow] skip: no program artifact found. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
+                "[litesvm_migration_flow] skip: no program artifact found. Set MIGRATOR_SBF_PATH or build target/deploy/migrator.so"
             );
             return None;
         };
@@ -572,6 +573,7 @@ impl MigrationFlowFixture {
         vault_new_qx: Address,
         refund_recipient_new_qx: Address,
         new_qx_mint: Address,
+        token_program: Address,
     ) -> TransactionResult {
         let ix = Instruction {
             program_id: self.program_id,
@@ -581,7 +583,7 @@ impl MigrationFlowFixture {
                 AccountMeta::new(vault_new_qx, false),
                 AccountMeta::new(refund_recipient_new_qx, false),
                 AccountMeta::new_readonly(new_qx_mint, false),
-                AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
+                AccountMeta::new_readonly(token_program, false),
             ],
             data: vec![3u8],
         };
@@ -601,6 +603,7 @@ impl MigrationFlowFixture {
             self.vault_new_qx,
             self.refund_recipient_new_qx,
             self.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
         )
     }
 
@@ -862,7 +865,7 @@ fn initialize_config_persists_expected_state() {
 
     let config = fixture.config();
     assert_eq!(config.discriminator, MigrationConfig::DISCRIMINATOR);
-    assert_eq!(config.version, 1);
+    assert_eq!(config.version, 2);
     assert_eq!(config.paused, 0);
     assert_eq!(config.admin, *fixture.ops_admin.pubkey().as_array());
     assert_eq!(config.old_qx_mint, *fixture.old_qx_mint.as_array());
@@ -1311,10 +1314,7 @@ fn migrate_exact_burns_old_and_transfers_new_one_to_one() {
         fixture.token_balance(&fixture.user_new_qx),
         INITIAL_USER_NEW_BALANCE
     );
-    assert_eq!(
-        fixture.token_balance(&fixture.vault_new_qx),
-        MIGRATION_CAP
-    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), MIGRATION_CAP);
     assert_eq!(
         fixture.mint_supply(&fixture.old_qx_mint),
         INITIAL_USER_OLD_BALANCE
@@ -2422,6 +2422,7 @@ fn withdraw_unclaimed_rejects_wrong_refund_destination_ata() {
             fixture.vault_new_qx,
             wrong_destination,
             fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidDestinationTokenAccount),
     );
@@ -2451,8 +2452,124 @@ fn withdraw_unclaimed_rejects_wrong_vault_account() {
             fixture.user_new_qx,
             fixture.refund_recipient_new_qx,
             fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
         ),
         custom_error(MigrationError::InvalidVault),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_wrong_token_program_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_with_accounts_result(
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            fixture.refund_recipient_new_qx,
+            fixture.new_qx_mint,
+            Address::new_unique(),
+        ),
+        custom_error(MigrationError::InvalidTokenProgram),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_wrong_vault_authority_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_with_accounts_result(
+            fixture.user.pubkey(),
+            fixture.vault_new_qx,
+            fixture.refund_recipient_new_qx,
+            fixture.new_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+        ),
+        custom_error(MigrationError::InvalidVaultAuthority),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_wrong_new_mint_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_with_accounts_result(
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            fixture.refund_recipient_new_qx,
+            fixture.old_qx_mint,
+            Address::new_from_array(TOKEN_PROGRAM_ID),
+        ),
+        custom_error(MigrationError::InvalidNewMint),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_refund_ata_with_delegate_controls() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    fixture.set_token_account_controls(fixture.refund_recipient_new_qx, 1, 1, 0, 0);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_result(),
+        custom_error(MigrationError::InvalidTokenAccountControls),
     );
     assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
     assert_eq!(

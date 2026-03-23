@@ -25,11 +25,11 @@
   "expectedUnclaimedWithdrawn": false,
   "fundingSignature": null,
   "verifiedBuild": {
-    "libraryName": "migrator_program",
+    "libraryName": "migrator",
     "mountPath": ".",
     "arch": "v0",
-    "programSoPath": "target/deploy/migrator_program.so",
-    "buildInfoPath": "artifacts/verified-build/migrator_program.build-info.json",
+    "programSoPath": "target/deploy/migrator.so",
+    "buildInfoPath": "artifacts/verified-build/migrator.build-info.json",
     "expectedExecutableHash": "REPLACE_EXECUTABLE_HASH",
     "repoUrl": null,
     "commitHash": "REPLACE_GIT_COMMIT_HASH"

@@ -43,10 +43,10 @@ test("parseInputs accepts a complete manifest with null optional values", () => 
     expectedUnclaimedWithdrawn: false,
     fundingSignature: null,
     verifiedBuild: {
-      libraryName: "migrator_program",
+      libraryName: "migrator",
       mountPath: "./svbmount",
       arch: "v0",
-      programSoPath: "target/deploy/migrator_program.so",
+      programSoPath: "target/deploy/migrator.so",
       expectedExecutableHash:
         "089d580bc1a69f9fecbf466e18f5b7186b3818fee0a567f8ee4c46ace0d84e25",
       repoUrl: null,
@@ -61,7 +61,7 @@ test("parseInputs accepts a complete manifest with null optional values", () => 
     "https://rpc-3.mainnet-beta.solana.com",
   ]);
   assert.equal(inputs.expectedUpgradeAuthority, null);
-  assert.equal(inputs.verifiedBuild.libraryName, "migrator_program");
+  assert.equal(inputs.verifiedBuild.libraryName, "migrator");
 });
 
 test("parseInputs rejects malformed manifests", () => {
@@ -99,10 +99,10 @@ test("parseInputs rejects malformed manifests", () => {
       expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
-        libraryName: "migrator_program",
+        libraryName: "migrator",
         mountPath: "./svbmount",
         arch: "v0",
-        programSoPath: "target/deploy/migrator_program.so",
+        programSoPath: "target/deploy/migrator.so",
         expectedExecutableHash:
           "089d580bc1a69f9fecbf466e18f5b7186b3818fee0a567f8ee4c46ace0d84e25",
         repoUrl: null,
@@ -136,10 +136,10 @@ test("parseInputs rejects malformed manifests", () => {
       expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
-        libraryName: "migrator_program",
+        libraryName: "migrator",
         mountPath: "./svbmount",
         arch: "v0",
-        programSoPath: "target/deploy/migrator_program.so",
+        programSoPath: "target/deploy/migrator.so",
         expectedExecutableHash:
           "089d580bc1a69f9fecbf466e18f5b7186b3818fee0a567f8ee4c46ace0d84e25",
         repoUrl: null,

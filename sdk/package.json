@@ -1,7 +1,9 @@
 {
-  "name": "@castercorp/migrator-program-sdk",
+  "name": "@castercorp/migrator-sdk",
   "version": "0.1.0",
   "private": true,
+  "author": "Quantu Labs",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

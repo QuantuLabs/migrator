@@ -73,19 +73,19 @@ test("parseProgramData enforces metadata length and authority decoding", () => {
 
 test("readReviewedBuildInfo parses reviewed verified-build metadata", () => {
   const tmpDir = mkdtempSync(join(tmpdir(), "migrator-build-info-"));
-  const buildInfoPath = join(tmpDir, "migrator_program.build-info.json");
+  const buildInfoPath = join(tmpDir, "migrator.build-info.json");
 
   writeFileSync(
     buildInfoPath,
     JSON.stringify({
       generatedAt: "2026-03-23T08:04:30Z",
       gitCommit: "caa4ac26af86ed78773cdf9ed417013df011f82c",
-      libraryName: "migrator_program",
+      libraryName: "migrator",
       arch: "v0",
       mountBaseDir: "/tmp",
       mountPath: "./svbmount",
       dockerPlatform: "linux/amd64",
-      programSoPath: "target/deploy/migrator_program.so",
+      programSoPath: "target/deploy/migrator.so",
       executableHash: "089d580bc1a69f9fecbf466e18f5b7186b3818fee0a567f8ee4c46ace0d84e25",
       programId: null,
       onChainHash: null,
@@ -95,26 +95,26 @@ test("readReviewedBuildInfo parses reviewed verified-build metadata", () => {
     }),
   );
 
-  assert.equal(readReviewedBuildInfo(buildInfoPath).libraryName, "migrator_program");
+  assert.equal(readReviewedBuildInfo(buildInfoPath).libraryName, "migrator");
 
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
 test("readReviewedBuildInfo rejects malformed executable hash", () => {
   const tmpDir = mkdtempSync(join(tmpdir(), "migrator-build-info-bad-"));
-  const buildInfoPath = join(tmpDir, "migrator_program.build-info.json");
+  const buildInfoPath = join(tmpDir, "migrator.build-info.json");
 
   writeFileSync(
     buildInfoPath,
     JSON.stringify({
       generatedAt: "2026-03-23T08:04:30Z",
       gitCommit: "caa4ac26af86ed78773cdf9ed417013df011f82c",
-      libraryName: "migrator_program",
+      libraryName: "migrator",
       arch: "v0",
       mountBaseDir: "/tmp",
       mountPath: "./svbmount",
       dockerPlatform: "linux/amd64",
-      programSoPath: "target/deploy/migrator_program.so",
+      programSoPath: "target/deploy/migrator.so",
       executableHash: "bad-hash",
       programId: null,
       onChainHash: null,

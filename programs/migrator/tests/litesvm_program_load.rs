@@ -12,23 +12,24 @@ use solana_transaction::versioned::VersionedTransaction;
 use solana_transaction_error::TransactionError;
 
 fn resolve_program_path() -> Option<PathBuf> {
-    if let Ok(path) = env::var("MIGRATOR_PROGRAM_SBF_PATH") {
+    if let Ok(path) =
+        env::var("MIGRATOR_SBF_PATH").or_else(|_| env::var("MIGRATOR_PROGRAM_SBF_PATH"))
+    {
         let p = PathBuf::from(path);
         if p.exists() {
             return Some(p);
         }
         eprintln!(
-            "[litesvm_program_load] MIGRATOR_PROGRAM_SBF_PATH set but file missing: {}",
+            "[litesvm_program_load] MIGRATOR_SBF_PATH set but file missing: {}",
             p.display()
         );
     }
 
     let fallback = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/deploy/migrator_program.so")
+        .join("../../target/deploy/migrator.so")
         .canonicalize()
         .unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/deploy/migrator_program.so")
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/deploy/migrator.so")
         });
 
     if fallback.exists() {
@@ -43,11 +44,11 @@ fn setup_svm() -> Option<(LiteSVM, Address, Keypair)> {
     let Some(program_path) = resolve_program_path() else {
         if require_artifact {
             panic!(
-                "[litesvm_program_load] required SBF artifact missing. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
+                "[litesvm_program_load] required SBF artifact missing. Set MIGRATOR_SBF_PATH or build target/deploy/migrator.so"
             );
         }
         eprintln!(
-            "[litesvm_program_load] skip: no program artifact found. Set MIGRATOR_PROGRAM_SBF_PATH or build target/deploy/migrator_program.so"
+            "[litesvm_program_load] skip: no program artifact found. Set MIGRATOR_SBF_PATH or build target/deploy/migrator.so"
         );
         return None;
     };

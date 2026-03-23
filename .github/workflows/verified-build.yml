@@ -43,4 +43,4 @@ jobs:
           name: verified-build-artifacts
           path: |
             artifacts/verified-build/*.json
-            target/deploy/migrator_program.so
+            target/deploy/migrator.so

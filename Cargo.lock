@@ -1637,7 +1637,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "migrator-program"
+name = "migrator"
 version = "0.1.0"
 dependencies = [
  "litesvm",
