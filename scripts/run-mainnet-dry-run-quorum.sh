@@ -4,9 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 INPUT_PATH="${1:-$ROOT_DIR/release/mainnet-inputs.template.json}"
 RPCS_ENV="${DRY_RUN_RPC_URLS:-}"
-
-REPORT_DIR="$(mktemp -d)"
-trap 'rm -rf "$REPORT_DIR"' EXIT
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
+REPORT_DIR="${DRY_RUN_REPORT_DIR:-$ROOT_DIR/artifacts/dry-run/quorum-$RUN_ID}"
+mkdir -p "$REPORT_DIR"
 
 pushd "$ROOT_DIR/sdk" >/dev/null
 if [[ -n "$RPCS_ENV" ]]; then
@@ -19,3 +19,4 @@ SOLANA_RPC_URLS="$RPCS_ENV" node --experimental-strip-types src/validateMainnetI
 popd >/dev/null
 
 echo "[dry-run-quorum] quorum validation passed"
+echo "[dry-run-quorum] artifact directory: $REPORT_DIR"

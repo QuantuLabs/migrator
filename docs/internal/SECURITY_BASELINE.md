@@ -1,6 +1,6 @@
 # Security Baseline
 
-This note maps the current `migrator-program` against current Solana-native security practices and the Pinocchio operating model.
+This note maps the current `migrator` against current Solana-native security practices and the Pinocchio operating model.
 
 ## Official Baseline
 
@@ -37,7 +37,7 @@ Pinocchio does not remove the need for the controls above. It mainly reduces fra
 
 That is a good fit here because the program has:
 
-- 3 instructions
+- 4 instructions
 - a single persistent config account
 - a single custody vault path
 - no dynamic account graph or variable business logic
@@ -94,7 +94,7 @@ Still missing or intentionally off-chain:
 
 If the goal is "ultra secure" before mainnet:
 
-1. keep the program surface frozen at `initialize_config`, `set_pause`, `migrate_exact`
+1. keep the program surface frozen at `initialize_config`, `set_pause`, `migrate_exact`, `withdraw_unclaimed`
 2. complete verified-build publication before launch
 3. keep the `Mollusk` lane live and add a broader `Trident` lane only if the program surface grows enough to justify it
 4. keep reserve-proof sign-off as a hard launch gate

@@ -7,6 +7,7 @@ import {
   diffSnapshotPaths,
   normalizeQuorumRpcUrls,
   parseRpcUrlList,
+  summarizeQuorumProviderResults,
 } from "./validateMainnetInputsQuorum.ts";
 
 test("parseRpcUrlList splits, trims, and normalizes comma-separated urls", () => {
@@ -82,10 +83,10 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
       expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
-        libraryName: "migrator_program",
+        libraryName: "migrator",
         mountPath: ".",
         arch: "v0",
-        programSoPath: "target/deploy/migrator_program.so",
+        programSoPath: "target/deploy/migrator.so",
         expectedExecutableHash: "a".repeat(64),
         repoUrl: null,
         commitHash: "b".repeat(40),
@@ -109,12 +110,12 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
       reviewedBuildInfo: {
         generatedAt: "2026-03-23T00:00:00Z",
         gitCommit: "b".repeat(40),
-        libraryName: "migrator_program",
+        libraryName: "migrator",
         arch: "v0",
         mountBaseDir: "/tmp",
         mountPath: "./svbmount",
         dockerPlatform: "linux/amd64",
-        programSoPath: "target/deploy/migrator_program.so",
+        programSoPath: "target/deploy/migrator.so",
         executableHash: "a".repeat(64),
         programId: null,
         onChainHash: null,
@@ -123,14 +124,27 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
         solanaCliVersion: "solana-cli 2.3.10",
       },
       verifiedBuildResolvedMountPath: "/tmp/repo",
-      verifiedBuildResolvedProgramSoPath: "/tmp/repo/target/deploy/migrator_program.so",
+      verifiedBuildResolvedProgramSoPath: "/tmp/repo/target/deploy/migrator.so",
       mintSupplyRaw: "100",
       mintDecimals: 9,
       reserveRawUnits: "100",
       reserveShortfallRawUnits: "0",
       fundingSignatureStatus: null,
       fundingSignatureObservation: null,
-      config: null,
+      config: {
+        admin: "admin",
+        oldQxMint: "old",
+        newQxMint: "new",
+        tokenProgramId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        vaultAuthority: "vault-auth",
+        vaultNewQx: "vault",
+        totalMigrated: "0",
+        migrationCap: "100",
+        startTs: "1",
+        endTs: "2",
+        refundRecipient: "fund",
+        unclaimedWithdrawn: false,
+      },
     },
     checks: {
       reserveCoversEligibleRawUnits: true,
@@ -142,5 +156,92 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
   assert.equal("reviewedBuildInfoPath" in snapshot.observed, false);
   assert.equal("verifiedBuildResolvedProgramSoPath" in snapshot.observed, false);
   assert.equal(snapshot.observed.reserveRawUnits, "100");
+  assert.equal(snapshot.observed.config?.refundRecipient, "fund");
+  assert.equal(snapshot.observed.config?.unclaimedWithdrawn, false);
   assert.equal(snapshot.ok, true);
+});
+
+test("summarizeQuorumProviderResults requires all providers to agree and pass", () => {
+  const goodReport = {
+    ok: true,
+    slot: 100,
+    phase: "pre-init",
+  } as Awaited<ReturnType<typeof validateMainnetInputsReport>>;
+
+  const result = summarizeQuorumProviderResults({
+    inputsPath: "/tmp/mainnet-inputs.json",
+    commitment: "finalized",
+    rpcUrls: ["https://a.invalid", "https://b.invalid"],
+    providerResults: [
+      {
+        rpcUrl: "https://a.invalid",
+        report: goodReport,
+        snapshot: {
+          checks: { reserveCoversEligibleRawUnits: true },
+          observed: { reserveRawUnits: "100" },
+          ok: true,
+        } as unknown as ReturnType<typeof buildMainnetConsensusSnapshot>,
+        error: null,
+      },
+      {
+        rpcUrl: "https://b.invalid",
+        report: goodReport,
+        snapshot: {
+          checks: { reserveCoversEligibleRawUnits: true },
+          observed: { reserveRawUnits: "100" },
+          ok: true,
+        } as unknown as ReturnType<typeof buildMainnetConsensusSnapshot>,
+        error: null,
+      },
+    ],
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mismatches.length, 0);
+  assert.equal(result.providers.every((provider) => provider.ok), true);
+});
+
+test("summarizeQuorumProviderResults rejects provider errors and snapshot mismatch", () => {
+  const goodReport = {
+    ok: true,
+    slot: 100,
+    phase: "post-init",
+  } as Awaited<ReturnType<typeof validateMainnetInputsReport>>;
+
+  const result = summarizeQuorumProviderResults({
+    inputsPath: "/tmp/mainnet-inputs.json",
+    commitment: "finalized",
+    rpcUrls: ["https://a.invalid", "https://b.invalid", "https://c.invalid"],
+    providerResults: [
+      {
+        rpcUrl: "https://a.invalid",
+        report: goodReport,
+        snapshot: {
+          observed: { reserveRawUnits: "100" },
+          ok: true,
+        } as unknown as ReturnType<typeof buildMainnetConsensusSnapshot>,
+        error: null,
+      },
+      {
+        rpcUrl: "https://b.invalid",
+        report: goodReport,
+        snapshot: {
+          observed: { reserveRawUnits: "90" },
+          ok: true,
+        } as unknown as ReturnType<typeof buildMainnetConsensusSnapshot>,
+        error: null,
+      },
+      {
+        rpcUrl: "https://c.invalid",
+        report: null,
+        snapshot: null,
+        error: "rpc failed",
+      },
+    ],
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.mismatches.length, 1);
+  assert.equal(result.mismatches[0]?.rpcUrl, "https://b.invalid");
+  assert.equal(result.providers[2]?.error, "rpc failed");
 });

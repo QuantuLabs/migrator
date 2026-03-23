@@ -51,10 +51,11 @@ Verify and publish these exact addresses:
 - old mint verification script passes
 - deployed config verification script passes
 - program authority verification script passes
-- reserve proof script passes with the approved migration-cap input
+- pre-init dry-run validator proves the reserve vault is empty and the funding account is ready for the approved migration-cap input
+- post-init reserve proof script passes with the approved migration-cap input
 - dry-run validator proves the derived config PDA is absent before init
 - approved migration-cap input exactly matches the `migration_cap` that will be initialized on-chain
-- reviewed dry-run manifest is re-run via the quorum lane against the reviewed `2` or `3` provider set before sign-off
+- reviewed dry-run manifest is re-run via the quorum lane against the full reviewed provider set before sign-off
 - config PDA and vault PDA re-derive correctly from the chosen program id
 - reserve vault owner is the vault PDA
 - reserve vault starts empty before the init transaction
@@ -100,14 +101,15 @@ Verify and publish these exact addresses:
 - the recorded funding wallet matches the reviewed refund recipient
 - ops admin recorded in config matches the intended pause authority
 - reviewed dry-run manifest returns exit `0`
-- the quorum artifact records the exact provider set used for sign-off
+- the quorum artifact directory records the exact provider set used for sign-off
 - if post-init replay is required, it is scheduled before unpausing claims
 
 ## Final Go/No-Go
 
 Go only if:
 
-- reserve sufficiency is proven
+- pre-init reserve emptiness and funding sufficiency are proven
+- post-init reserve sufficiency is proven
 - all published addresses match the final deployment inputs
 - frontend and docs point to the same addresses
 - pause authority is verified

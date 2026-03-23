@@ -17,13 +17,15 @@ It is the best fit for the current project because:
 
 Current `Mollusk` tests live in:
 
-- `programs/migrator-program/tests/mollusk_fuzz_lane.rs`
+- `programs/migrator/tests/mollusk_fuzz_lane.rs`
 
 The lane currently covers:
 
 - successful `initialize_config`
 - rejected `initialize_config` when `migration_cap > reserve`
 - `set_pause(true)` followed by `migrate_exact`, proving the paused path stops before any token CPI
+- successful `withdraw_unclaimed` closeout after expiry
+- rejected `withdraw_unclaimed` paths for paused state, wrong token program, and invalid refund-account controls
 - a real `SPL + ATA` bootstrap path that initializes the mints and token accounts through `spl-token`, creates the destination ATA through the associated-token program, then executes successful `migrate_exact`
 - fixture roundtrip replay for both successful and failing `initialize_config`
 

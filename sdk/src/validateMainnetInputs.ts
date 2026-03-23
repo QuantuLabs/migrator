@@ -255,7 +255,7 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
         : ctx.initializerAuthority.toBase58() === ctx.expectedUpgradeAuthority,
     expectedRefundRecipientMatchesFundingAuthority:
       ctx.inputs.expectedRefundRecipient === ctx.fundingAuthority.toBase58(),
-    verifiedBuildLibraryNameMatches: ctx.inputs.verifiedBuild.libraryName === "migrator_program",
+    verifiedBuildLibraryNameMatches: ctx.inputs.verifiedBuild.libraryName === "migrator",
     verifiedBuildMountPathPresent: ctx.inputs.verifiedBuild.mountPath.length > 0,
     verifiedBuildProgramSoPathPresent: ctx.inputs.verifiedBuild.programSoPath.length > 0,
     verifiedBuildExecutableHashMatches:
@@ -311,7 +311,12 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
     reserveDelegateCleared: ctx.parsedReserve.delegateOption === 0,
     reserveDelegatedAmountCleared: ctx.parsedReserve.delegatedAmount === 0n,
     reserveCloseAuthorityCleared: ctx.parsedReserve.closeAuthorityOption === 0,
-    reserveCoversEligibleRawUnits: ctx.parsedReserve.amount >= ctx.eligibleRawUnits,
+    reserveCoversEligibleRawUnits: ctx.inputs.expectConfigInitialized
+      ? ctx.parsedReserve.amount >= ctx.eligibleRawUnits
+      : null,
+    reserveEmptyBeforeInit: ctx.inputs.expectConfigInitialized
+      ? null
+      : ctx.parsedReserve.amount === 0n,
     fundingSignatureSucceeded:
       ctx.inputs.fundingSignature === null
         ? null
@@ -332,6 +337,10 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
       ctx.inputs.fundingSignature === null
         ? null
         : BigInt(ctx.fundingObservation?.reserveDeltaRaw ?? "0") > 0n,
+    fundingSignatureDeltaMatchesMigrationCap:
+      ctx.inputs.fundingSignature === null
+        ? null
+        : BigInt(ctx.fundingObservation?.reserveDeltaRaw ?? "0") === ctx.migrationCapRaw,
     configPresentWhenExpected: ctx.inputs.expectConfigInitialized ? ctx.configInfo !== null : null,
     configAbsentBeforeInit: ctx.inputs.expectConfigInitialized ? null : ctx.configInfo === null,
     configOwnedByProgram:
@@ -673,6 +682,8 @@ export async function validateMainnetInputsReport(params: {
               migrationCap: parsedConfig.migrationCap.toString(),
               startTs: parsedConfig.startTs.toString(),
               endTs: parsedConfig.endTs.toString(),
+              refundRecipient: parsedConfig.refundRecipient.toBase58(),
+              unclaimedWithdrawn: parsedConfig.unclaimedWithdrawn,
             },
     },
     checks,

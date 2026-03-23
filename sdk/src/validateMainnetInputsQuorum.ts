@@ -15,8 +15,19 @@ import {
 } from "./releaseUtils.ts";
 
 type MainnetValidationReport = Awaited<ReturnType<typeof validateMainnetInputsReport>>;
+type MainnetConsensusSnapshot = ReturnType<typeof buildMainnetConsensusSnapshot>;
 
-export function parseRpcUrlList(raw: string | undefined): string[] {
+export type QuorumProviderResult = {
+  rpcUrl: string;
+  report: MainnetValidationReport | null;
+  snapshot: MainnetConsensusSnapshot | null;
+  error: string | null;
+};
+
+export function parseRpcUrlList(
+  raw: string | undefined,
+  sourceLabel = "SOLANA_RPC_URLS",
+): string[] {
   if (!raw) {
     return [];
   }
@@ -25,18 +36,19 @@ export function parseRpcUrlList(raw: string | undefined): string[] {
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)
-    .map((entry, index) => normalizeReleaseRpcUrl(entry, `SOLANA_RPC_URLS[${index}]`));
+    .map((entry, index) => normalizeReleaseRpcUrl(entry, `${sourceLabel}[${index}]`));
 }
 
 export function normalizeQuorumRpcUrls(params: {
   primaryRpcUrl: string;
   secondaryRpcUrls?: string[];
   envRpcUrls?: string;
+  envRpcUrlsLabel?: string;
 }): string[] {
   const merged = [
     normalizeReleaseRpcUrl(params.primaryRpcUrl, "primaryRpcUrl"),
     ...(params.secondaryRpcUrls ?? []),
-    ...parseRpcUrlList(params.envRpcUrls),
+    ...parseRpcUrlList(params.envRpcUrls, params.envRpcUrlsLabel ?? "SOLANA_RPC_URLS"),
   ];
 
   return [...new Set(merged)];
@@ -109,6 +121,48 @@ export function diffSnapshotPaths(
   );
 }
 
+export function summarizeQuorumProviderResults(params: {
+  inputsPath: string;
+  commitment: Commitment;
+  rpcUrls: string[];
+  providerResults: QuorumProviderResult[];
+}) {
+  const baseline = params.providerResults.find((result) => result.snapshot !== null);
+  const mismatches =
+    baseline === undefined
+      ? []
+      : params.providerResults
+          .filter((result) => result.snapshot !== null)
+          .map((result) => ({
+            rpcUrl: result.rpcUrl,
+            diffPaths: diffSnapshotPaths(baseline.snapshot, result.snapshot),
+          }))
+          .filter((result) => result.diffPaths.length > 0);
+
+  const ok =
+    params.providerResults.every(
+      (result) => result.error === null && result.report?.ok === true,
+    ) && mismatches.length === 0;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    inputsPath: params.inputsPath,
+    commitment: params.commitment,
+    rpcUrls: params.rpcUrls,
+    providerCount: params.rpcUrls.length,
+    ok,
+    baselineRpcUrl: baseline?.rpcUrl ?? null,
+    providers: params.providerResults.map((result) => ({
+      rpcUrl: result.rpcUrl,
+      ok: result.report?.ok ?? false,
+      slot: result.report?.slot ?? null,
+      phase: result.report?.phase ?? null,
+      error: result.error,
+    })),
+    mismatches,
+  };
+}
+
 export async function validateMainnetInputsQuorum(params: {
   inputsPath: string;
   commitment: Commitment;
@@ -145,39 +199,12 @@ export async function validateMainnetInputsQuorum(params: {
     }),
   );
 
-  const baseline = providerResults.find((result) => result.snapshot !== null);
-  const mismatches =
-    baseline === undefined
-      ? []
-      : providerResults
-          .filter((result) => result.snapshot !== null)
-          .map((result) => ({
-            rpcUrl: result.rpcUrl,
-            diffPaths: diffSnapshotPaths(baseline.snapshot, result.snapshot),
-          }))
-          .filter((result) => result.diffPaths.length > 0);
-
-  const ok =
-    providerResults.every((result) => result.error === null && result.report?.ok === true) &&
-    mismatches.length === 0;
-
-  return {
-    generatedAt: new Date().toISOString(),
+  return summarizeQuorumProviderResults({
     inputsPath: params.inputsPath,
     commitment: params.commitment,
     rpcUrls: params.rpcUrls,
-    providerCount: params.rpcUrls.length,
-    ok,
-    baselineRpcUrl: baseline?.rpcUrl ?? null,
-    providers: providerResults.map((result) => ({
-      rpcUrl: result.rpcUrl,
-      ok: result.report?.ok ?? false,
-      slot: result.report?.slot ?? null,
-      phase: result.report?.phase ?? null,
-      error: result.error,
-    })),
-    mismatches,
-  };
+    providerResults,
+  });
 }
 
 export async function main() {
@@ -194,7 +221,9 @@ export async function main() {
   const rpcUrls = normalizeQuorumRpcUrls({
     primaryRpcUrl: inputs.rpcUrl,
     secondaryRpcUrls: inputs.secondaryRpcUrls,
-    envRpcUrls: process.env.SOLANA_RPC_URLS,
+    envRpcUrls: process.env.DRY_RUN_RPC_URLS ?? process.env.SOLANA_RPC_URLS,
+    envRpcUrlsLabel:
+      process.env.DRY_RUN_RPC_URLS !== undefined ? "DRY_RUN_RPC_URLS" : "SOLANA_RPC_URLS",
   });
   const report = await validateMainnetInputsQuorum({
     inputsPath,

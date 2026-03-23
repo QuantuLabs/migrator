@@ -16,7 +16,7 @@ Fill this document for the final reviewed launch bundle.
 - primary RPC:
 - secondary RPCs:
 - dry-run report path:
-- dry-run quorum report path:
+- dry-run quorum artifact directory:
 
 ## Build And Binary
 

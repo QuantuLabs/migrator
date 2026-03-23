@@ -2,7 +2,7 @@
 
 ## Goal
 
-Produce a deterministic release artifact for `migrator_program`, record its
+Produce a deterministic release artifact for `migrator`, record its
 hash, and be ready to compare it against the deployed on-chain program.
 
 This runbook is aligned with the official Solana verified-build flow:
@@ -39,7 +39,7 @@ Run:
 
 What it does:
 
-- runs `solana-verify build <ABSOLUTE_REPO_PATH> --library-name migrator_program`
+- runs `solana-verify build <ABSOLUTE_REPO_PATH> --library-name migrator`
 - computes the verified executable hash with `solana-verify get-executable-hash`
 - writes machine-readable metadata under `artifacts/verified-build/`
 - records `programSoPath` as a repo-relative path so release manifests stay portable across reviewers and CI runners
@@ -55,11 +55,11 @@ Notes:
 CI:
 
 - `.github/workflows/verified-build.yml` runs the same lane on `push`, `pull_request`, and `workflow_dispatch`
-- the workflow uploads both `migrator_program.build-info.json` and the verified `.so` artifact for reviewer diffing
+- the workflow uploads both `migrator.build-info.json` and the verified `.so` artifact for reviewer diffing
 
 Expected artifact:
 
-- `artifacts/verified-build/migrator_program.build-info.json`
+- `artifacts/verified-build/migrator.build-info.json`
 
 ## Compare Against On-Chain Program
 
@@ -80,7 +80,7 @@ solana-verify verify-from-repo \
   --current-dir \
   --program-id <PROGRAM_ID> \
   --commit-hash <GIT_COMMIT_HASH> \
-  --library-name migrator_program \
+  --library-name migrator \
   <HTTPS_REPO_URL>
 ```
 

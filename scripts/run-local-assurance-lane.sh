@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PROGRAM_DIR="$ROOT_DIR/programs/migrator-program"
+PROGRAM_DIR="$ROOT_DIR/programs/migrator"
 SDK_DIR="$ROOT_DIR/sdk"
-REQUIRE_VERIFIED_BUILD="${ASSURANCE_REQUIRE_VERIFIED_BUILD:-0}"
+REQUIRE_VERIFIED_BUILD="${ASSURANCE_REQUIRE_VERIFIED_BUILD:-1}"
 
 echo "[assurance] running Rust unit/integration tests"
 pushd "$PROGRAM_DIR" >/dev/null
@@ -33,7 +33,8 @@ if [[ -n "$(git -C "$ROOT_DIR" status --porcelain)" ]]; then
   echo "[assurance] verified-build skipped because the git worktree is not clean"
   echo "[assurance] commit or stash changes, then run ./scripts/run-verified-build.sh for release metadata"
   if [[ "$REQUIRE_VERIFIED_BUILD" == "1" ]]; then
-    echo "[assurance] ASSURANCE_REQUIRE_VERIFIED_BUILD=1 requires a clean worktree" >&2
+    echo "[assurance] local assurance now requires verified-build by default" >&2
+    echo "[assurance] set ASSURANCE_REQUIRE_VERIFIED_BUILD=0 only for non-release local debugging" >&2
     exit 1
   fi
 else

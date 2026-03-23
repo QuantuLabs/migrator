@@ -90,12 +90,11 @@ Rules:
 - the manifest `rpcUrl` is always the primary provider
 - the manifest `secondaryRpcUrls` list is part of the reviewed release record
 - `DRY_RUN_RPC_URLS` is an explicit operator override only; if used, the final resolved provider set must be attached to the release record
-- the lane accepts only `2` or `3` distinct normalized HTTPS providers
-- `2` providers means `2-of-2 exact-match`
-- `3` providers means `2-of-3 exact-match with the primary provider included in the winning set`
-- `DRY_RUN_MAX_SLOT_DRIFT` caps the winning-set slot skew, default `32`
+- the lane accepts at least `2` distinct normalized HTTPS providers
+- the lane requires every resolved provider to return `ok=true`
+- the lane requires exact consensus across the full resolved provider set after stripping provider-local noise like `rpcUrl`, `slot`, and `generatedAt`
 - independent means different providers or vendors, not just different URLs on the same backend
-- quorum artifacts are persisted under `artifacts/dry-run/<run-id>/`
+- quorum artifacts are persisted under `artifacts/dry-run/quorum-<timestamp>/` by default, or under `DRY_RUN_REPORT_DIR` if set
 - release sign-off requires the persisted artifact bundle, not only exit `0`
 
 ## Phase Usage
@@ -122,6 +121,6 @@ exit `0` on the exact reviewed manifest.
 For final approval:
 
 - require `run-mainnet-dry-run.sh` to pass on the primary reviewed RPC
-- require `run-mainnet-dry-run-quorum.sh` to pass across the reviewed `2` or `3` provider set
+- require `run-mainnet-dry-run-quorum.sh` to pass across the full reviewed provider set
 - treat any report mismatch as a release blocker until resolved
 - attach the resulting dry-run artifact directory to the release record

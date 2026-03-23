@@ -4,7 +4,7 @@
 
 `Kani` is still the right formal-check layer for this repo, but the batch command is not the most reliable way to run it on the current toolchain.
 
-The current pinned environment verifies every harness successfully when run one by one, but `cargo kani -p migrator-program --features no-entrypoint` can intermittently die late with a `goto-instrument` tooling error after already proving prior harnesses.
+The current pinned environment verifies every harness successfully when run one by one, but `cargo kani -p migrator --features no-entrypoint` can intermittently die late with a `goto-instrument` tooling error after already proving prior harnesses.
 
 For this repository, the authoritative lane is therefore:
 
@@ -24,7 +24,9 @@ The lane verifies the current `#[kani::proof]` harnesses individually:
 - token-account parsing rules
 - config layout stability
 - config unaligned read/write roundtrip
+- refund-recipient and unclaimed-withdrawn reserved-byte roundtrips
 - migration-window validation
+- unclaimed-withdrawal gate timing
 
 Because the harness list is explicit in the script, this lane is deterministic and easy to audit during release review.
 
@@ -43,7 +45,7 @@ This will iterate the approved harness list and stop at the first failure.
 The direct batch command is still useful for ad hoc local checks:
 
 ```bash
-cargo kani -p migrator-program --features no-entrypoint
+cargo kani -p migrator --features no-entrypoint
 ```
 
 But it should not be treated as the release gate on the current pinned toolchain because of the late-stage `goto-instrument` instability described above.
