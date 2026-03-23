@@ -20,6 +20,8 @@
   "endTs": "REPLACE_END_TS",
   "expectedPaused": false,
   "expectedTotalMigratedRaw": "0",
+  "expectedRefundRecipient": "REPLACE_EXPECTED_REFUND_RECIPIENT",
+  "expectedUnclaimedWithdrawn": false,
   "fundingSignature": null,
   "verifiedBuild": {
     "libraryName": "migrator_program",

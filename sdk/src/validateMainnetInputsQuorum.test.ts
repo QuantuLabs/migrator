@@ -77,6 +77,8 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
       endTs: "2",
       expectedPaused: false,
       expectedTotalMigratedRaw: "0",
+      expectedRefundRecipient: "init",
+      expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
         libraryName: "migrator_program",
@@ -134,7 +136,7 @@ test("buildMainnetConsensusSnapshot strips local-path noise but keeps consensus 
       reviewedBuildInfoProgramSoPathMatchesManifest: true,
     },
     ok: true,
-  } as Awaited<ReturnType<typeof validateMainnetInputsReport>>);
+  } as unknown as Awaited<ReturnType<typeof validateMainnetInputsReport>>);
 
   assert.equal("reviewedBuildInfoPath" in snapshot.observed, false);
   assert.equal("verifiedBuildResolvedProgramSoPath" in snapshot.observed, false);

@@ -38,6 +38,8 @@ test("parseInputs accepts a complete manifest with null optional values", () => 
     endTs: "2",
     expectedPaused: false,
     expectedTotalMigratedRaw: "0",
+    expectedRefundRecipient: "Config1111111111111111111111111111111111111",
+    expectedUnclaimedWithdrawn: false,
     fundingSignature: null,
     verifiedBuild: {
       libraryName: "migrator_program",
@@ -91,6 +93,8 @@ test("parseInputs rejects malformed manifests", () => {
       endTs: "2",
       expectedPaused: false,
       expectedTotalMigratedRaw: "0",
+      expectedRefundRecipient: "Config1111111111111111111111111111111111111",
+      expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
         libraryName: "migrator_program",
@@ -125,6 +129,8 @@ test("parseInputs rejects malformed manifests", () => {
       endTs: "2",
       expectedPaused: false,
       expectedTotalMigratedRaw: "0",
+      expectedRefundRecipient: "Config1111111111111111111111111111111111111",
+      expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
         libraryName: "migrator_program",

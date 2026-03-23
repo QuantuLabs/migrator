@@ -1,6 +1,7 @@
 pub mod initialize_config;
 pub mod migrate_exact;
 pub mod set_pause;
+pub mod withdraw_unclaimed;
 
 use pinocchio::{
     cpi::Signer,
@@ -107,6 +108,14 @@ pub fn evaluate_migration_gate(
 }
 
 #[inline(always)]
+pub fn evaluate_unclaimed_withdrawal_gate(end_ts: i64, now: i64) -> Result<(), MigrationError> {
+    if now <= end_ts {
+        return Err(MigrationError::MigrationStillOpen);
+    }
+    Ok(())
+}
+
+#[inline(always)]
 pub fn assert_program_upgrade_authority(
     authority_signer: &AccountView,
     program_data: &AccountView,
@@ -188,8 +197,8 @@ pub fn create_pda_account_idempotent(
 #[cfg(test)]
 mod tests {
     use super::{
-        evaluate_migration_gate, parse_bool_exact, parse_initialize_config_data_exact,
-        parse_u64_exact, parse_window_exact,
+        evaluate_migration_gate, evaluate_unclaimed_withdrawal_gate, parse_bool_exact,
+        parse_initialize_config_data_exact, parse_u64_exact, parse_window_exact,
     };
     use crate::errors::MigrationError;
     use pinocchio::error::ProgramError;
@@ -274,11 +283,24 @@ mod tests {
             Err(MigrationError::ProtocolPaused)
         );
     }
+
+    #[test]
+    fn evaluate_unclaimed_withdrawal_gate_requires_strictly_past_end_ts() {
+        assert_eq!(evaluate_unclaimed_withdrawal_gate(20, 21), Ok(()));
+        assert_eq!(
+            evaluate_unclaimed_withdrawal_gate(20, 20),
+            Err(MigrationError::MigrationStillOpen)
+        );
+        assert_eq!(
+            evaluate_unclaimed_withdrawal_gate(20, 19),
+            Err(MigrationError::MigrationStillOpen)
+        );
+    }
 }
 
 #[cfg(kani)]
 mod verification {
-    use super::evaluate_migration_gate;
+    use super::{evaluate_migration_gate, evaluate_unclaimed_withdrawal_gate};
     use crate::errors::MigrationError;
 
     #[kani::proof]
@@ -316,5 +338,18 @@ mod verification {
             evaluate_migration_gate(false, start_ts, end_ts, end_ts),
             Ok(())
         );
+    }
+
+    #[kani::proof]
+    fn unclaimed_withdrawal_gate_requires_now_strictly_above_end_ts() {
+        let end_ts: i64 = kani::any();
+        let now: i64 = kani::any();
+        let result = evaluate_unclaimed_withdrawal_gate(end_ts, now);
+
+        if now <= end_ts {
+            assert_eq!(result, Err(MigrationError::MigrationStillOpen));
+        } else {
+            assert_eq!(result, Ok(()));
+        }
     }
 }

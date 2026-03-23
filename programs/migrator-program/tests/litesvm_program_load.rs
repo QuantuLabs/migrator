@@ -1,12 +1,12 @@
 use std::{env, path::PathBuf};
 
 use litesvm::LiteSVM;
-use solana_program as _;
 use solana_account::Account;
 use solana_address::Address;
 use solana_instruction::{error::InstructionError, AccountMeta, Instruction};
 use solana_keypair::Keypair;
 use solana_message::{Message, VersionedMessage};
+use solana_program as _;
 use solana_signer::Signer;
 use solana_transaction::versioned::VersionedTransaction;
 use solana_transaction_error::TransactionError;
@@ -326,6 +326,50 @@ fn load_program_and_reject_initialize_with_trailing_window_payload() {
     };
 
     let err = send_ix_result(&mut svm, &payer, &[&ops_admin], ix);
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
+    );
+}
+
+#[test]
+fn load_program_and_reject_withdraw_unclaimed_with_trailing_payload() {
+    let Some((mut svm, program_id, payer)) = setup_svm() else {
+        return;
+    };
+
+    let config = Address::new_unique();
+    let vault_authority = Address::new_unique();
+    let vault_new_qx = Address::new_unique();
+    let refund_recipient_new_qx = Address::new_unique();
+    let new_qx_mint = Address::new_unique();
+    let token_program = Address::new_unique();
+
+    for address in [
+        config,
+        vault_authority,
+        vault_new_qx,
+        refund_recipient_new_qx,
+        new_qx_mint,
+        token_program,
+    ] {
+        set_placeholder_system_account(&mut svm, address);
+    }
+
+    let ix = Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(config, false),
+            AccountMeta::new_readonly(vault_authority, false),
+            AccountMeta::new(vault_new_qx, false),
+            AccountMeta::new(refund_recipient_new_qx, false),
+            AccountMeta::new_readonly(new_qx_mint, false),
+            AccountMeta::new_readonly(token_program, false),
+        ],
+        data: vec![3u8, 0u8],
+    };
+
+    let err = send_ix_result(&mut svm, &payer, &[], ix);
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)

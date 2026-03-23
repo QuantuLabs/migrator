@@ -30,7 +30,7 @@ Fill the real values for:
 - migration cap raw units
 - eligible raw units
 - migration window
-- expected `paused` and `totalMigrated` values for the reviewed post-init state
+- expected `paused`, `totalMigrated`, `refundRecipient`, and `unclaimedWithdrawn` values for the reviewed post-init state
 - verified-build metadata
 
 ## Validation Command
@@ -72,7 +72,7 @@ This validates:
 - reserve vault policy
 - reserve sufficiency
 - config PDA absence before init
-- exact post-init config state if `expectConfigInitialized=true`, including `startTs`, `endTs`, `paused`, and `totalMigrated`
+- exact post-init config state if `expectConfigInitialized=true`, including `startTs`, `endTs`, `paused`, `totalMigrated`, `refundRecipient`, and `unclaimedWithdrawn`
 - optional funding signature success/finalization plus reserve-vault/mint touch when one is recorded in the manifest
 
 ## Quorum Replay

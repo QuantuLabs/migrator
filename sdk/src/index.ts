@@ -28,6 +28,8 @@ export type MigrationConfig = {
   vaultNewQx: PublicKey;
   totalMigrated: bigint;
   migrationCap: bigint;
+  refundRecipient: PublicKey;
+  unclaimedWithdrawn: boolean;
   startTs: bigint;
   endTs: bigint;
 };
@@ -77,6 +79,10 @@ export function encodeMigrateExactData(amountIn: bigint): Buffer {
   data[0] = 2;
   data.writeBigUInt64LE(amountIn, 1);
   return data;
+}
+
+export function encodeWithdrawUnclaimedData(): Buffer {
+  return Buffer.from([3]);
 }
 
 export function buildInitializeConfigIx(params: {
@@ -156,6 +162,28 @@ export function buildMigrateExactIx(params: {
   });
 }
 
+export function buildWithdrawUnclaimedIx(params: {
+  programId: PublicKey;
+  config: PublicKey;
+  vaultAuthority: PublicKey;
+  vaultNewQx: PublicKey;
+  refundRecipientNewQx: PublicKey;
+  newQxMint: PublicKey;
+}): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: params.programId,
+    keys: [
+      { pubkey: params.config, isSigner: false, isWritable: true },
+      { pubkey: params.vaultAuthority, isSigner: false, isWritable: false },
+      { pubkey: params.vaultNewQx, isSigner: false, isWritable: true },
+      { pubkey: params.refundRecipientNewQx, isSigner: false, isWritable: true },
+      { pubkey: params.newQxMint, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data: encodeWithdrawUnclaimedData(),
+  });
+}
+
 export function decodeMigrationConfig(data: Buffer): MigrationConfig {
   if (data.length !== MIGRATION_CONFIG_SIZE) {
     throw new Error(`MigrationConfig must be exactly ${MIGRATION_CONFIG_SIZE} bytes, got ${data.length}`);
@@ -180,6 +208,8 @@ export function decodeMigrationConfig(data: Buffer): MigrationConfig {
     vaultNewQx: new PublicKey(data.subarray(172, 204)),
     totalMigrated: data.readBigUInt64LE(208),
     migrationCap: data.readBigUInt64LE(232),
+    refundRecipient: new PublicKey(data.subarray(240, 272)),
+    unclaimedWithdrawn: data[272] !== 0,
     startTs: data.readBigInt64LE(216),
     endTs: data.readBigInt64LE(224),
   };

@@ -63,6 +63,8 @@ export type MainnetInputs = {
   endTs: string;
   expectedPaused: boolean;
   expectedTotalMigratedRaw: string;
+  expectedRefundRecipient: string;
+  expectedUnclaimedWithdrawn: boolean;
   fundingSignature: string | null;
   verifiedBuild: VerifiedBuildInputs;
 };
@@ -153,6 +155,14 @@ export function parseInputs(raw: unknown): MainnetInputs {
     expectedTotalMigratedRaw: asString(
       record.expectedTotalMigratedRaw,
       "expectedTotalMigratedRaw",
+    ),
+    expectedRefundRecipient: asString(
+      record.expectedRefundRecipient,
+      "expectedRefundRecipient",
+    ),
+    expectedUnclaimedWithdrawn: asBoolean(
+      record.expectedUnclaimedWithdrawn,
+      "expectedUnclaimedWithdrawn",
     ),
     fundingSignature: asOptionalString(record.fundingSignature, "fundingSignature"),
     verifiedBuild: {
@@ -378,6 +388,14 @@ export function buildMainnetChecks(ctx: MainnetChecksContext) {
     configTotalMigratedMatches:
       ctx.inputs.expectConfigInitialized && ctx.parsedConfig
         ? ctx.parsedConfig.totalMigrated === ctx.expectedTotalMigratedRaw
+        : null,
+    configRefundRecipientMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.refundRecipient.toBase58() === ctx.inputs.expectedRefundRecipient
+        : null,
+    configUnclaimedWithdrawnMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.unclaimedWithdrawn === ctx.inputs.expectedUnclaimedWithdrawn
         : null,
   };
 }

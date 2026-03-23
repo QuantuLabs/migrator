@@ -60,6 +60,8 @@ function makeConfigData(params: {
   migrationCap: bigint;
   startTs: bigint;
   endTs: bigint;
+  refundRecipient?: PublicKey;
+  unclaimedWithdrawn?: boolean;
 }): Buffer {
   const data = Buffer.alloc(MIGRATION_CONFIG_SIZE);
   MIGRATION_CONFIG_DISCRIMINATOR.copy(data, 0);
@@ -77,6 +79,8 @@ function makeConfigData(params: {
   data.writeBigInt64LE(params.startTs, 216);
   data.writeBigInt64LE(params.endTs, 224);
   data.writeBigUInt64LE(params.migrationCap, 232);
+  (params.refundRecipient ?? params.admin).toBuffer().copy(data, 240);
+  data[272] = params.unclaimedWithdrawn ? 1 : 0;
   return data;
 }
 
@@ -151,6 +155,7 @@ test("buildConfigReport accepts an exact config match", () => {
   const reserveVault = pk(14);
   const opsAdmin = pk(15);
   const vaultAuthority = pk(16);
+  const refundRecipient = pk(26);
 
   const report = buildConfigReport({
     rpcUrl: "https://example.invalid",
@@ -170,6 +175,8 @@ test("buildConfigReport accepts an exact config match", () => {
     endTs: 200n,
     paused: false,
     totalMigrated: 25n,
+    refundRecipient,
+    unclaimedWithdrawn: false,
     info: makeInfo(
       programId,
       makeConfigData({
@@ -185,6 +192,8 @@ test("buildConfigReport accepts an exact config match", () => {
         migrationCap: 1_000n,
         startTs: 100n,
         endTs: 200n,
+        refundRecipient,
+        unclaimedWithdrawn: false,
       }),
     ),
   });
@@ -192,6 +201,8 @@ test("buildConfigReport accepts an exact config match", () => {
   assert.equal(report.ok, true);
   assert.equal(report.checks.configOwnedByProgram, true);
   assert.equal(report.checks.migrationCapMatches, true);
+  assert.equal(report.checks.refundRecipientMatches, true);
+  assert.equal(report.checks.unclaimedWithdrawnMatches, true);
 });
 
 test("buildConfigReport rejects mismatched reserve vault", () => {
@@ -203,6 +214,7 @@ test("buildConfigReport rejects mismatched reserve vault", () => {
   const wrongReserveVault = pk(22);
   const opsAdmin = pk(23);
   const vaultAuthority = pk(24);
+  const refundRecipient = pk(25);
 
   const report = buildConfigReport({
     rpcUrl: "https://example.invalid",
@@ -222,6 +234,8 @@ test("buildConfigReport rejects mismatched reserve vault", () => {
     endTs: 20n,
     paused: true,
     totalMigrated: 3n,
+    refundRecipient,
+    unclaimedWithdrawn: false,
     info: makeInfo(
       programId,
       makeConfigData({
@@ -237,6 +251,8 @@ test("buildConfigReport rejects mismatched reserve vault", () => {
         migrationCap: 500n,
         startTs: 10n,
         endTs: 20n,
+        refundRecipient,
+        unclaimedWithdrawn: false,
       }),
     ),
   });

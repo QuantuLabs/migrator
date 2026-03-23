@@ -32,6 +32,7 @@ findVaultAuthorityPda(programId: PublicKey): [PublicKey, number]
 buildInitializeConfigIx(args, accounts): TransactionInstruction
 buildSetPauseIx(args, accounts): TransactionInstruction
 buildMigrateExactIx(args, accounts): TransactionInstruction
+buildWithdrawUnclaimedIx(args, accounts): TransactionInstruction
 decodeMigrationConfig(data: Buffer): MigrationConfig
 ```
 
@@ -43,12 +44,19 @@ The frontend can then handle:
 - explorer links
 - verification UI
 
+`withdraw_unclaimed` notes:
+
+- it is permissionless to trigger after `end_ts`
+- it always pays out to the canonical `new QX` ATA for the configured refund recipient
+- in V1 the refund recipient is set to `initializerAuthority` during `initialize_config`
+- it transfers only the unclaimed approved amount, not the entire vault balance
+
 Operational verification commands:
 
 ```bash
 npm run verify-mint -- <NEW_QX_MINT> <EXPECTED_DECIMALS>
 npm run verify-vault -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT>
-npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW>
+npm run verify-config -- <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW> <REFUND_RECIPIENT> <UNCLAIMED_WITHDRAWN:true|false>
 npm run verify-program-authority -- <PROGRAM_ID> <EXPECTED_AUTHORITY|none>
 npm run reserve-proof -- <PROGRAM_ID> <NEW_QX_MINT> <RESERVE_VAULT> <ELIGIBLE_RAW_UNITS> <EXPECTED_DECIMALS> [FUNDING_SIGNATURE]
 npm run validate-mainnet-inputs -- <PATH_TO_MAINNET_INPUTS_JSON>
@@ -67,7 +75,7 @@ All verification commands are hard gates:
 - program-account ownership, executability, and linkage to the derived `ProgramData` PDA
 - old-mint policy as well as new-mint policy
 - verified executable hash against the local `solana-verify` artifact path recorded in the manifest
-- config PDA absence before init and exact config field matches after init, including `startTs`, `endTs`, `paused`, and `totalMigrated`
+- config PDA absence before init and exact config field matches after init, including `startTs`, `endTs`, `paused`, `totalMigrated`, `refundRecipient`, and `unclaimedWithdrawn`
 - reserve sufficiency against the reviewed eligible raw-unit total
 - optional funding-signature success/finalization plus proof that the signature touched the reviewed reserve vault and mint when one is recorded in the manifest
 

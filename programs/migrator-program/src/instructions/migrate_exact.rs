@@ -10,8 +10,7 @@ use crate::{
     state::{
         checked_total_migrated_after, token_amount, validate_custody_token_account,
         validate_destination_token_account, validate_migration_cap, validate_new_mint_account,
-        validate_old_mint_account, validate_token_account, validate_token_program,
-        MigrationConfig,
+        validate_old_mint_account, validate_token_account, validate_token_program, MigrationConfig,
     },
     VAULT_AUTHORITY_SEED,
 };

@@ -46,6 +46,7 @@ pub fn process_instruction(
         0 => instructions::initialize_config::process(program_id, accounts, &data[1..]),
         1 => instructions::set_pause::process(program_id, accounts, &data[1..]),
         2 => instructions::migrate_exact::process(program_id, accounts, &data[1..]),
+        3 => instructions::withdraw_unclaimed::process(program_id, accounts, &data[1..]),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }

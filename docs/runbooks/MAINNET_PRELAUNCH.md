@@ -17,6 +17,8 @@ Do not initialize mainnet config until all of the following are true:
 Important ordering:
 
 - `initialize_config` requires the current upgrade authority to still exist and sign
+- in V1, the `initialize_config` signer also becomes the immutable refund recipient for `withdraw_unclaimed`
+- do not use a temporary deployment wallet for `initialize_config`; use the reviewed refund wallet directly
 - do not freeze or clear upgrade authority before `initialize_config` succeeds
 - if policy requires transfer or freeze, do it after init and then verify the resulting `ProgramData` state
 
@@ -28,6 +30,8 @@ Verify and publish these exact addresses:
 - config PDA
 - vault authority PDA
 - reserve vault token account
+- refund recipient wallet
+- refund recipient ATA for `new QX`
 - old QX mint
 - new QX mint
 - admin / ops signer policy
@@ -52,6 +56,7 @@ Verify and publish these exact addresses:
 - reserve vault owner is the vault PDA
 - reserve vault mint is the final `new QX` mint
 - reserve vault delegate and close-authority controls are cleared
+- reserve funding is exact or intentionally reviewed; V1 closeout returns only `migration_cap - total_migrated`
 - deployed binary hash or exact build artifact path is recorded
 - verified-build metadata artifact is recorded
 - verified-build lane was run from a clean tracked git state
@@ -69,6 +74,7 @@ Verify and publish these exact addresses:
 - planned `migration_cap` equals the reviewed eligible raw-unit total
 - the team explicitly accepts that V1 is an open live-holder migrator, or excluded balances are operationally locked before launch
 - published config state matches the runbook address set exactly
+- published config state includes the fixed refund recipient and refund ATA
 - old-token deprecation notice is ready
 - any controlled old-token liquidity removal or disablement plan is ready
 - official routing, bots, and docs stop pointing users to the old pool when migration opens
@@ -84,6 +90,7 @@ Verify and publish these exact addresses:
 - upgrade authority state matches the published policy for the current phase
 - the exact current upgrade authority address is recorded
 - the wallet allowed to call `initialize_config` is recorded
+- the recorded `initialize_config` signer matches the reviewed refund recipient
 - ops admin recorded in config matches the intended pause authority
 - reviewed dry-run manifest returns exit `0`
 - the quorum artifact records the exact provider set used for sign-off

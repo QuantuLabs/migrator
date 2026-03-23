@@ -26,6 +26,8 @@ export type ConfigReport = {
   expectedEndTs: string;
   expectedPaused: boolean;
   expectedTotalMigrated: string;
+  expectedRefundRecipient: string;
+  expectedUnclaimedWithdrawn: boolean;
   config: {
     version: number;
     bump: number;
@@ -39,6 +41,8 @@ export type ConfigReport = {
     vaultNewQx: string;
     totalMigrated: string;
     migrationCap: string;
+    refundRecipient: string;
+    unclaimedWithdrawn: boolean;
     startTs: string;
     endTs: string;
   };
@@ -57,18 +61,20 @@ export type ConfigReport = {
     endTsMatches: boolean;
     pausedMatches: boolean;
     totalMigratedMatches: boolean;
+    refundRecipientMatches: boolean;
+    unclaimedWithdrawnMatches: boolean;
   };
   ok: boolean;
 };
 
-function parsePausedArg(pausedArg: string): boolean {
-  if (pausedArg === "true") {
+function parseBooleanArg(value: string, label: string): boolean {
+  if (value === "true") {
     return true;
   }
-  if (pausedArg === "false") {
+  if (value === "false") {
     return false;
   }
-  throw new Error(`Invalid paused flag: ${pausedArg}`);
+  throw new Error(`Invalid ${label}: ${value}`);
 }
 
 export function buildConfigReport(params: {
@@ -89,6 +95,8 @@ export function buildConfigReport(params: {
   endTs: bigint;
   paused: boolean;
   totalMigrated: bigint;
+  refundRecipient: PublicKey;
+  unclaimedWithdrawn: boolean;
   info: AccountInfo<Buffer>;
 }): ConfigReport {
   if (params.info.data.length !== MIGRATION_CONFIG_SIZE) {
@@ -113,6 +121,9 @@ export function buildConfigReport(params: {
     endTsMatches: config.endTs === params.endTs,
     pausedMatches: config.paused === params.paused,
     totalMigratedMatches: config.totalMigrated === params.totalMigrated,
+    refundRecipientMatches: config.refundRecipient.equals(params.refundRecipient),
+    unclaimedWithdrawnMatches:
+      config.unclaimedWithdrawn === params.unclaimedWithdrawn,
   };
   const ok = Object.values(checks).every(Boolean);
 
@@ -132,6 +143,8 @@ export function buildConfigReport(params: {
     expectedEndTs: params.endTs.toString(),
     expectedPaused: params.paused,
     expectedTotalMigrated: params.totalMigrated.toString(),
+    expectedRefundRecipient: params.refundRecipient.toBase58(),
+    expectedUnclaimedWithdrawn: params.unclaimedWithdrawn,
     config: {
       version: config.version,
       bump: config.bump,
@@ -145,6 +158,8 @@ export function buildConfigReport(params: {
       vaultNewQx: config.vaultNewQx.toBase58(),
       totalMigrated: config.totalMigrated.toString(),
       migrationCap: config.migrationCap.toString(),
+      refundRecipient: config.refundRecipient.toBase58(),
+      unclaimedWithdrawn: config.unclaimedWithdrawn,
       startTs: config.startTs.toString(),
       endTs: config.endTs.toString(),
     },
@@ -166,6 +181,8 @@ export async function verifyConfig(params: {
   endTs: bigint;
   paused: boolean;
   totalMigrated: bigint;
+  refundRecipient: PublicKey;
+  unclaimedWithdrawn: boolean;
 }): Promise<ConfigReport> {
   const [configPda, configBump] = findMigrationConfigPda(params.programId);
   const [vaultAuthority, vaultAuthorityBump] = findVaultAuthorityPda(params.programId);
@@ -195,6 +212,8 @@ export async function verifyConfig(params: {
     endTs: params.endTs,
     paused: params.paused,
     totalMigrated: params.totalMigrated,
+    refundRecipient: params.refundRecipient,
+    unclaimedWithdrawn: params.unclaimedWithdrawn,
     info,
   });
 }
@@ -210,6 +229,8 @@ export async function main() {
   const endTsArg = process.argv[9];
   const pausedArg = process.argv[10];
   const totalMigratedArg = process.argv[11];
+  const refundRecipientArg = process.argv[12];
+  const unclaimedWithdrawnArg = process.argv[13];
   const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
   const commitment = resolveCommitment();
 
@@ -223,10 +244,12 @@ export async function main() {
     startTsArg === undefined ||
     endTsArg === undefined ||
     pausedArg === undefined ||
-    totalMigratedArg === undefined
+    totalMigratedArg === undefined ||
+    !refundRecipientArg ||
+    unclaimedWithdrawnArg === undefined
   ) {
     throw new Error(
-      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW>",
+      "Usage: node src/verifyConfig.ts <PROGRAM_ID> <OLD_QX_MINT> <NEW_QX_MINT> <RESERVE_VAULT> <OPS_ADMIN> <MIGRATION_CAP_RAW> <START_TS> <END_TS> <PAUSED:true|false> <TOTAL_MIGRATED_RAW> <REFUND_RECIPIENT> <UNCLAIMED_WITHDRAWN:true|false>",
     );
   }
 
@@ -241,8 +264,13 @@ export async function main() {
     migrationCap: BigInt(migrationCapArg),
     startTs: BigInt(startTsArg),
     endTs: BigInt(endTsArg),
-    paused: parsePausedArg(pausedArg),
+    paused: parseBooleanArg(pausedArg, "paused"),
     totalMigrated: BigInt(totalMigratedArg),
+    refundRecipient: new PublicKey(refundRecipientArg),
+    unclaimedWithdrawn: parseBooleanArg(
+      unclaimedWithdrawnArg,
+      "unclaimedWithdrawn",
+    ),
   });
 
   console.log(JSON.stringify(report, null, 2));

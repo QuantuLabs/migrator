@@ -14,8 +14,8 @@ const MINT_LEN: usize = 82;
 const TOKEN_ACCOUNT_STATE_OFFSET: usize = 108;
 const TOKEN_ACCOUNT_LEN_FULL: usize = 165;
 const NATIVE_MINT_ID: [u8; 32] = [
-    6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
-    26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
+    6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220, 26,
+    235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +43,8 @@ impl MigrationConfig {
     pub const VERSION: u8 = 1;
     pub const SIZE: usize = size_of::<Self>();
     const MIGRATION_CAP_OFFSET: usize = 0;
+    const REFUND_RECIPIENT_OFFSET: usize = 8;
+    const UNCLAIMED_WITHDRAWN_OFFSET: usize = 40;
 
     #[inline(always)]
     fn assert_storage_account(
@@ -120,6 +122,29 @@ impl MigrationConfig {
     pub fn set_migration_cap(&mut self, migration_cap: u64) {
         self.reserved[Self::MIGRATION_CAP_OFFSET..Self::MIGRATION_CAP_OFFSET + 8]
             .copy_from_slice(&migration_cap.to_le_bytes());
+    }
+
+    #[inline(always)]
+    pub fn refund_recipient(&self) -> [u8; 32] {
+        self.reserved[Self::REFUND_RECIPIENT_OFFSET..Self::REFUND_RECIPIENT_OFFSET + 32]
+            .try_into()
+            .unwrap()
+    }
+
+    #[inline(always)]
+    pub fn set_refund_recipient(&mut self, refund_recipient: &[u8; 32]) {
+        self.reserved[Self::REFUND_RECIPIENT_OFFSET..Self::REFUND_RECIPIENT_OFFSET + 32]
+            .copy_from_slice(refund_recipient);
+    }
+
+    #[inline(always)]
+    pub fn unclaimed_withdrawn(&self) -> bool {
+        self.reserved[Self::UNCLAIMED_WITHDRAWN_OFFSET] != 0
+    }
+
+    #[inline(always)]
+    pub fn set_unclaimed_withdrawn(&mut self, withdrawn: bool) {
+        self.reserved[Self::UNCLAIMED_WITHDRAWN_OFFSET] = withdrawn as u8;
     }
 }
 
@@ -414,6 +439,22 @@ mod verification {
         assert_eq!(core::mem::offset_of!(MigrationConfig, start_ts), 216);
         assert_eq!(core::mem::offset_of!(MigrationConfig, end_ts), 224);
         assert_eq!(core::mem::offset_of!(MigrationConfig, reserved), 232);
+    }
+
+    #[kani::proof]
+    fn migration_config_refund_recipient_roundtrips_through_reserved_bytes() {
+        let refund_recipient: [u8; 32] = kani::any();
+        let mut config = any_migration_config();
+        config.set_refund_recipient(&refund_recipient);
+        assert_eq!(config.refund_recipient(), refund_recipient);
+    }
+
+    #[kani::proof]
+    fn migration_config_unclaimed_withdrawn_flag_roundtrips() {
+        let withdrawn: bool = kani::any();
+        let mut config = any_migration_config();
+        config.set_unclaimed_withdrawn(withdrawn);
+        assert_eq!(config.unclaimed_withdrawn(), withdrawn);
     }
 
     #[kani::proof]

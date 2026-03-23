@@ -18,6 +18,7 @@ Current implementation status:
 - `initialize_config` implemented
 - `set_pause` implemented
 - `migrate_exact` implemented
+- `withdraw_unclaimed` implemented
 - manual TypeScript SDK implemented
 - operational verification scripts implemented for mint, reserve vault, config, program authority, and reserve-proof checks
 - `Tokenkeg only` policy documented explicitly
@@ -79,6 +80,16 @@ Current verification coverage:
 - `LiteSVM` rollback when post-burn transfer signing fails
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
+- `LiteSVM` withdraw_unclaimed happy path for exact `migration_cap - total_migrated`
+- `LiteSVM` withdraw_unclaimed before-deadline rejection
+- `LiteSVM` withdraw_unclaimed exact-boundary rejection with rollback invariants
+- `LiteSVM` withdraw_unclaimed wrong-destination rejection
+- `LiteSVM` withdraw_unclaimed wrong-vault rejection
+- `LiteSVM` withdraw_unclaimed underfunded-vault rejection with rollback invariants
+- `LiteSVM` withdraw_unclaimed permissionless third-party caller success path
+- `LiteSVM` withdraw_unclaimed one-shot rejection after the closeout flag is set
+- `Mollusk` withdraw_unclaimed happy path and strict-deadline rejection
+- release validators now gate `refundRecipient` and `unclaimedWithdrawn`
 - `Mollusk` successful `initialize_config` with inner-instruction tracking
 - `Mollusk` rejected `initialize_config` when `migration_cap > reserve`
 - `Mollusk` paused `migrate_exact` rejection before any token CPI

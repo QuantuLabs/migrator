@@ -111,6 +111,8 @@ function migrationConfigData(params: {
   startTs?: bigint;
   endTs?: bigint;
   paused?: boolean;
+  refundRecipient?: PublicKey;
+  unclaimedWithdrawn?: boolean;
 }): Buffer {
   const data = Buffer.alloc(MIGRATION_CONFIG_SIZE);
   MIGRATION_CONFIG_DISCRIMINATOR.copy(data, 0);
@@ -128,6 +130,8 @@ function migrationConfigData(params: {
   data.writeBigInt64LE(params.startTs ?? 0n, 216);
   data.writeBigInt64LE(params.endTs ?? 10n, 224);
   data.writeBigUInt64LE(params.migrationCap ?? 100n, 232);
+  (params.refundRecipient ?? params.admin).toBuffer().copy(data, 240);
+  data[272] = params.unclaimedWithdrawn ? 1 : 0;
   return data;
 }
 
@@ -209,6 +213,7 @@ test("buildConfigReport accepts an exact-size matching config", () => {
   const reserveVault = key(35);
   const opsAdmin = key(36);
   const vaultAuthority = key(37);
+  const refundRecipient = key(38);
   const migrationCap = 500n;
   const startTs = 100n;
   const endTs = 200n;
@@ -232,6 +237,8 @@ test("buildConfigReport accepts an exact-size matching config", () => {
     endTs,
     paused: false,
     totalMigrated,
+    refundRecipient,
+    unclaimedWithdrawn: false,
     info: accountInfo(
       migrationConfigData({
         bump: 250,
@@ -246,6 +253,8 @@ test("buildConfigReport accepts an exact-size matching config", () => {
         startTs,
         endTs,
         paused: false,
+        refundRecipient,
+        unclaimedWithdrawn: false,
       }),
       programId,
     ),
@@ -253,6 +262,8 @@ test("buildConfigReport accepts an exact-size matching config", () => {
 
   assert.equal(report.ok, true);
   assert.equal(report.config.migrationCap, migrationCap.toString());
+  assert.equal(report.checks.refundRecipientMatches, true);
+  assert.equal(report.checks.unclaimedWithdrawnMatches, true);
 });
 
 test("buildReserveProofReport rejects native new mint and reserve shortfall", () => {
@@ -330,6 +341,8 @@ test("buildMainnetChecks flags native new mint and accepts relative build path m
       endTs: "2",
       expectedPaused: false,
       expectedTotalMigratedRaw: "0",
+      expectedRefundRecipient: initializerAuthority.toBase58(),
+      expectedUnclaimedWithdrawn: false,
       fundingSignature: null,
       verifiedBuild: {
         libraryName: "migrator_program",

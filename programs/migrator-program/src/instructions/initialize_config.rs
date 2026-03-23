@@ -59,6 +59,9 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     if old_mint_key == new_mint_key {
         return Err(MigrationError::InvalidConfig.into());
     }
+    if initializer_authority.address() == &Address::default() {
+        return Err(MigrationError::InvalidConfig.into());
+    }
 
     let old_decimals = validate_old_mint_account(old_qx_mint, &old_mint_key)?;
     let new_decimals = validate_new_mint_account(new_qx_mint, &new_mint_key)?;
@@ -113,6 +116,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     config.end_ts = end_ts;
     config.reserved = [0u8; 64];
     config.set_migration_cap(migration_cap);
+    config.set_refund_recipient(initializer_authority.address().as_array());
     unsafe { config.store(config_account, program_id)? };
 
     pinocchio_log::log!("MigrationConfigInitialized");

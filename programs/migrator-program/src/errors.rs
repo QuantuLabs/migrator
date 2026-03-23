@@ -23,6 +23,8 @@ pub enum MigrationError {
     MigrationNotStarted = 17,
     MigrationCapExceeded = 18,
     InvalidDestinationTokenAccount = 19,
+    MigrationStillOpen = 20,
+    UnclaimedAlreadyWithdrawn = 21,
 }
 
 impl From<MigrationError> for ProgramError {

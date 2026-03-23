@@ -26,6 +26,7 @@ Token policy:
 7. V1 is open to any live holder of burnable `old QX`; there is no on-chain allowlist or Merkle root.
 8. No late-claim penalty in V1.
 9. No admin instruction can change the ratio or swap the mint addresses after initialization.
+10. After expiry, V1 can return only the still-unclaimed approved migration amount back to the configured refund wallet.
 
 ## Instructions
 
@@ -40,6 +41,7 @@ Purpose:
 - bind the reserve vault
 - store the live migration window
 - bind an immutable total migration cap
+- bind an immutable refund recipient; in V1 it is set to `initializer_authority`
 
 Expected accounts:
 
@@ -133,6 +135,43 @@ Important runtime note:
 - the transaction is atomic, so if the transfer fails after the burn CPI, the whole transaction reverts
 - `migration_cap` is stored in `reserved[0..8]` to keep the binary layout size stable in V1
 
+### 3. `withdraw_unclaimed()`
+
+Post-window closeout path.
+
+This instruction is permissionless. No signer is required once the refund destination
+has already been fixed inside config.
+
+Expected accounts:
+
+1. `[writable]` config PDA
+2. `[]` vault authority PDA
+3. `[writable]` vault new QX token account
+4. `[writable]` refund recipient new QX ATA
+5. `[]` new QX mint
+6. `[]` token program
+
+Required checks:
+
+- `now > end_ts`
+- `config.unclaimed_withdrawn == false`
+- config PDA and vault PDA seeds re-derive on-chain
+- token program matches config and approved `Tokenkeg`
+- reserve vault account equals `config.vault_new_qx`
+- reserve vault owner equals vault authority PDA
+- reserve vault delegate and close-authority controls are cleared
+- new mint matches `config.new_qx_mint`
+- destination account owner equals the configured `refund_recipient`
+- destination account mint equals `new QX`
+- destination account address equals the canonical ATA for `(refund_recipient, new QX mint)`
+- `vault balance >= migration_cap - total_migrated`
+
+Effects:
+
+1. transfer exactly `migration_cap - total_migrated` from reserve vault to the configured refund ATA
+2. set the one-shot `unclaimed_withdrawn` flag
+3. emit closeout log marker
+
 ## PDA Seeds
 
 - `MigrationConfig PDA`: `[b"migration-config"]`
@@ -164,7 +203,7 @@ Padding note:
 | total_migrated | `u64` |
 | start_ts | `i64` |
 | end_ts | `i64` |
-| reserved | `[u8; 64]` (`reserved[0..8]` = `migration_cap`) |
+| reserved | `[u8; 64]` (`reserved[0..8]` = `migration_cap`, `reserved[8..40]` = `refund_recipient`, `reserved[40]` = `unclaimed_withdrawn`) |
 
 ## Invariants
 
@@ -176,6 +215,7 @@ Padding note:
 6. Program never mints `new QX`; it only transfers from a pre-funded reserve.
 7. Program never transfers `old QX` anywhere; it only burns it.
 8. Program never accepts a caller-provided authority or destination without validating it against config and PDA seeds.
+9. `withdraw_unclaimed` is one-shot.
 
 ## Frontend Contract
 
@@ -188,6 +228,7 @@ Minimum client helpers:
 - `buildInitializeConfigIx(...)`
 - `buildSetPauseIx(...)`
 - `buildMigrateExactIx(...)`
+- `buildWithdrawUnclaimedIx(...)`
 - `decodeMigrationConfig(data)`
 
 Instruction encoding:
@@ -200,11 +241,13 @@ Initial discriminator map:
 - `0` => `initialize_config(start_ts, end_ts, migration_cap)`
 - `1` => `set_pause(paused)`
 - `2` => `migrate_exact(amount_in)`
+- `3` => `withdraw_unclaimed()`
 
 ## Ops Notes
 
 - `vault_new_qx` should be funded before public launch
 - `migration_cap` should equal the approved migration total for the open live-holder window
+- the refund destination for unclaimed funds is fixed in config; in V1 that is `initializer_authority`
 - if any legacy balances are intentionally excluded, they must be operationally locked or removed before launch because V1 does not enforce wallet-level eligibility on-chain
 - the final Bags mint must be verified as `Tokenkeg` before mainnet initialization
 - public docs must publish:

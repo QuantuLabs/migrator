@@ -21,8 +21,8 @@ const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
 const VAULT_NEW_QX_BYTES: [u8; 32] = [43u8; 32];
 const USER_OLD_QX_BYTES: [u8; 32] = [44u8; 32];
 const NATIVE_MINT_BYTES: [u8; 32] = [
-    6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
-    26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
+    6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220, 26,
+    235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
 ];
 
 const INITIAL_RESERVE: u64 = 1_000;
@@ -143,6 +143,7 @@ struct MigrationFlowFixture {
     vault_new_qx: Address,
     user_old_qx: Address,
     user_new_qx: Address,
+    refund_recipient_new_qx: Address,
 }
 
 impl MigrationFlowFixture {
@@ -188,12 +189,10 @@ impl MigrationFlowFixture {
         let vault_new_qx = Address::new_from_array(VAULT_NEW_QX_BYTES);
         let user_old_qx = Address::new_from_array(USER_OLD_QX_BYTES);
         let user_new_qx = associated_token_address(&user.pubkey(), &new_qx_mint);
+        let refund_recipient_new_qx = associated_token_address(&initializer.pubkey(), &new_qx_mint);
 
-        svm.set_account(
-            config_pda,
-            Account::default(),
-        )
-        .expect("config PDA placeholder should be set as an uninitialized system account");
+        svm.set_account(config_pda, Account::default())
+            .expect("config PDA placeholder should be set as an uninitialized system account");
 
         svm.set_account(
             vault_authority_pda,
@@ -287,6 +286,22 @@ impl MigrationFlowFixture {
         )
         .expect("user new token account should be set");
 
+        svm.set_account(
+            refund_recipient_new_qx,
+            Account {
+                lamports: 1_000_000,
+                data: make_token_account_data(
+                    &new_qx_mint,
+                    &initializer.pubkey(),
+                    INITIAL_USER_NEW_BALANCE,
+                ),
+                owner: token_program,
+                executable: false,
+                rent_epoch: 0,
+            },
+        )
+        .expect("refund recipient new token account should be set");
+
         Some(Self {
             svm,
             program_id,
@@ -301,6 +316,7 @@ impl MigrationFlowFixture {
             vault_new_qx,
             user_old_qx,
             user_new_qx,
+            refund_recipient_new_qx,
         })
     }
 
@@ -518,6 +534,73 @@ impl MigrationFlowFixture {
             .expect("set_pause should succeed");
     }
 
+    #[allow(clippy::result_large_err)]
+    fn send_withdraw_unclaimed_with_accounts_result(
+        &mut self,
+        vault_authority: Address,
+        vault_new_qx: Address,
+        refund_recipient_new_qx: Address,
+        new_qx_mint: Address,
+    ) -> TransactionResult {
+        let ix = Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(self.config_pda, false),
+                AccountMeta::new_readonly(vault_authority, false),
+                AccountMeta::new(vault_new_qx, false),
+                AccountMeta::new(refund_recipient_new_qx, false),
+                AccountMeta::new_readonly(new_qx_mint, false),
+                AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
+            ],
+            data: vec![3u8],
+        };
+
+        let blockhash = self.svm.latest_blockhash();
+        let msg = Message::new_with_blockhash(&[ix], Some(&self.user.pubkey()), &blockhash);
+        let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[&self.user])
+            .expect("signed tx should be created");
+
+        self.svm.send_transaction(tx)
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn send_withdraw_unclaimed_result(&mut self) -> TransactionResult {
+        self.send_withdraw_unclaimed_with_accounts_result(
+            self.vault_authority_pda,
+            self.vault_new_qx,
+            self.refund_recipient_new_qx,
+            self.new_qx_mint,
+        )
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn send_withdraw_unclaimed_result_with_payer(&mut self, payer: &Keypair) -> TransactionResult {
+        let ix = Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(self.config_pda, false),
+                AccountMeta::new_readonly(self.vault_authority_pda, false),
+                AccountMeta::new(self.vault_new_qx, false),
+                AccountMeta::new(self.refund_recipient_new_qx, false),
+                AccountMeta::new_readonly(self.new_qx_mint, false),
+                AccountMeta::new_readonly(Address::new_from_array(TOKEN_PROGRAM_ID), false),
+            ],
+            data: vec![3u8],
+        };
+
+        let blockhash = self.svm.latest_blockhash();
+        let msg = Message::new_with_blockhash(&[ix], Some(&payer.pubkey()), &blockhash);
+        let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[payer])
+            .expect("signed tx should be created");
+
+        self.svm.send_transaction(tx)
+    }
+
+    fn send_withdraw_unclaimed(&mut self) {
+        self.send_withdraw_unclaimed_result()
+            .expect("withdraw_unclaimed should succeed");
+    }
+
     fn set_config_window(&mut self, start_ts: i64, end_ts: i64) {
         let mut account = self
             .svm
@@ -611,7 +694,10 @@ impl MigrationFlowFixture {
     }
 
     fn set_account_owner_program(&mut self, address: Address, owner: Address) {
-        let mut account = self.svm.get_account(&address).expect("account should exist");
+        let mut account = self
+            .svm
+            .get_account(&address)
+            .expect("account should exist");
         account.owner = owner;
         self.svm
             .set_account(address, account)
@@ -758,6 +844,10 @@ fn initialize_config_persists_expected_state() {
     assert_eq!(config.vault_new_qx, *fixture.vault_new_qx.as_array());
     assert_eq!(config.total_migrated, 0);
     assert_eq!(config.migration_cap(), MIGRATION_CAP);
+    assert_eq!(
+        config.refund_recipient(),
+        *fixture.initializer.pubkey().as_array()
+    );
     assert_eq!(config.start_ts, 0);
     assert_eq!(config.end_ts, i64::MAX);
 }
@@ -1191,7 +1281,12 @@ fn migrate_exact_progressively_reaches_migration_cap_and_rejects_next_unit() {
     let old_supply_before = fixture.mint_supply(&fixture.old_qx_mint);
 
     assert_tx_error(
-        fixture.send_migrate_exact_result(1, fixture.vault_new_qx, fixture.old_qx_mint, fixture.new_qx_mint),
+        fixture.send_migrate_exact_result(
+            1,
+            fixture.vault_new_qx,
+            fixture.old_qx_mint,
+            fixture.new_qx_mint,
+        ),
         custom_error(MigrationError::MigrationCapExceeded),
     );
 
@@ -1655,8 +1750,14 @@ fn migrate_exact_rejects_non_ata_destination_account() {
     );
 
     assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
-    assert_eq!(fixture.token_balance(&fixture.user_new_qx), INITIAL_USER_NEW_BALANCE);
-    assert_eq!(fixture.token_balance(&alt_user_new_qx), INITIAL_USER_NEW_BALANCE);
+    assert_eq!(
+        fixture.token_balance(&fixture.user_new_qx),
+        INITIAL_USER_NEW_BALANCE
+    );
+    assert_eq!(
+        fixture.token_balance(&alt_user_new_qx),
+        INITIAL_USER_NEW_BALANCE
+    );
     assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
     assert_eq!(fixture.config().total_migrated, total_before);
 }
@@ -2046,7 +2147,10 @@ fn migrate_exact_rolls_back_when_user_old_balance_is_insufficient() {
         fixture.old_qx_mint,
         fixture.new_qx_mint,
     );
-    assert!(tx_result.is_err(), "burn CPI should fail when source balance is insufficient");
+    assert!(
+        tx_result.is_err(),
+        "burn CPI should fail when source balance is insufficient"
+    );
 
     assert_eq!(fixture.config().total_migrated, total_before);
     assert_eq!(fixture.token_balance(&fixture.user_old_qx), old_before);
@@ -2089,4 +2193,254 @@ fn migrate_exact_rolls_back_burn_when_transfer_signing_fails() {
     assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
     assert_eq!(fixture.mint_supply(&fixture.old_qx_mint), old_supply_before);
     assert_eq!(fixture.mint_supply(&fixture.new_qx_mint), new_supply_before);
+}
+
+#[test]
+fn withdraw_unclaimed_transfers_remaining_reserve_to_fixed_refund_recipient() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, 10);
+    fixture.send_migrate_exact(MIGRATION_AMOUNT);
+    fixture.set_config_window(-1, -1);
+
+    let unclaimed_amount = fixture.config().migration_cap() - fixture.config().total_migrated;
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
+
+    fixture.send_withdraw_unclaimed();
+
+    assert_eq!(
+        fixture.token_balance(&fixture.vault_new_qx),
+        reserve_before - unclaimed_amount
+    );
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before + unclaimed_amount
+    );
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
+    assert_eq!(fixture.config().total_migrated, MIGRATION_AMOUNT);
+    assert!(fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_before_deadline() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, i64::MAX);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_result(),
+        custom_error(MigrationError::MigrationStillOpen),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_at_exact_end_boundary_without_mutation() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, 0);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_result(),
+        custom_error(MigrationError::MigrationStillOpen),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_wrong_refund_destination_ata() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+    let wrong_destination = Address::new_unique();
+    fixture
+        .svm
+        .set_account(
+            wrong_destination,
+            Account {
+                lamports: 1_000_000,
+                data: make_token_account_data(
+                    &fixture.new_qx_mint,
+                    &fixture.initializer.pubkey(),
+                    INITIAL_USER_NEW_BALANCE,
+                ),
+                owner: Address::new_from_array(TOKEN_PROGRAM_ID),
+                executable: false,
+                rent_epoch: 0,
+            },
+        )
+        .expect("wrong refund destination token account should be set");
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_with_accounts_result(
+            fixture.vault_authority_pda,
+            fixture.vault_new_qx,
+            wrong_destination,
+            fixture.new_qx_mint,
+        ),
+        custom_error(MigrationError::InvalidDestinationTokenAccount),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_wrong_vault_account() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_with_accounts_result(
+            fixture.vault_authority_pda,
+            fixture.user_new_qx,
+            fixture.refund_recipient_new_qx,
+            fixture.new_qx_mint,
+        ),
+        custom_error(MigrationError::InvalidVault),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_is_permissionless_and_still_pays_fixed_refund_recipient() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, 10);
+    fixture.send_migrate_exact(MIGRATION_AMOUNT);
+    fixture.set_config_window(-1, -1);
+    let unclaimed_amount = fixture.config().migration_cap() - fixture.config().total_migrated;
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let user_new_before = fixture.token_balance(&fixture.user_new_qx);
+    let third_party = Keypair::new();
+    fixture
+        .svm
+        .airdrop(&third_party.pubkey(), 1_000_000_000)
+        .expect("third-party payer should be funded");
+
+    fixture
+        .send_withdraw_unclaimed_result_with_payer(&third_party)
+        .expect("permissionless withdraw_unclaimed should succeed");
+
+    assert_eq!(
+        fixture.token_balance(&fixture.vault_new_qx),
+        reserve_before - unclaimed_amount
+    );
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before + unclaimed_amount
+    );
+    assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
+    assert!(fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_when_vault_is_underfunded_without_mutation() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(0, 10);
+    fixture.send_migrate_exact(MIGRATION_AMOUNT);
+    fixture.set_config_window(-1, -1);
+    let unclaimed_amount = fixture.config().migration_cap() - fixture.config().total_migrated;
+    fixture.set_token_balance(fixture.vault_new_qx, unclaimed_amount - 1);
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_before = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_result(),
+        custom_error(MigrationError::InsufficientVaultLiquidity),
+    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_before
+    );
+    assert_eq!(fixture.config().total_migrated, total_before);
+    assert!(!fixture.config().unclaimed_withdrawn());
+}
+
+#[test]
+fn withdraw_unclaimed_rejects_after_unclaimed_amount_is_already_withdrawn() {
+    let Some(mut fixture) = MigrationFlowFixture::setup() else {
+        return;
+    };
+
+    fixture.send_initialize_config(-1, -1);
+    fixture.send_withdraw_unclaimed();
+    let second_payer = Keypair::new();
+    fixture
+        .svm
+        .airdrop(&second_payer.pubkey(), 1_000_000_000)
+        .expect("second payer should be funded");
+    let reserve_after_first = fixture.token_balance(&fixture.vault_new_qx);
+    let refund_after_first = fixture.token_balance(&fixture.refund_recipient_new_qx);
+    let total_after_first = fixture.config().total_migrated;
+
+    assert_tx_error(
+        fixture.send_withdraw_unclaimed_result_with_payer(&second_payer),
+        custom_error(MigrationError::UnclaimedAlreadyWithdrawn),
+    );
+    assert_eq!(
+        fixture.token_balance(&fixture.vault_new_qx),
+        reserve_after_first
+    );
+    assert_eq!(
+        fixture.token_balance(&fixture.refund_recipient_new_qx),
+        refund_after_first
+    );
+    assert_eq!(fixture.config().total_migrated, total_after_first);
+    assert!(fixture.config().unclaimed_withdrawn());
 }
