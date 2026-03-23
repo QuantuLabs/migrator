@@ -4,10 +4,12 @@ use migrator_program::{
     errors::MigrationError, state::MigrationConfig, MIGRATION_CONFIG_SEED, TOKEN_PROGRAM_ID,
     UPGRADEABLE_LOADER_PROGRAM_ID, VAULT_AUTHORITY_SEED,
 };
+use mollusk_svm_programs_token::token::ELF as TOKENKEG_ELF;
 use mollusk_svm::{
     program::{
-        create_keyed_account_for_builtin_program, keyed_account_for_bpf_loader_v2_program,
-        keyed_account_for_bpf_loader_v3_program, keyed_account_for_system_program, loader_keys,
+        create_keyed_account_for_builtin_program, create_program_account_loader_v2,
+        keyed_account_for_bpf_loader_v2_program, keyed_account_for_bpf_loader_v3_program,
+        keyed_account_for_system_program, loader_keys,
     },
     result::Check,
     Mollusk,
@@ -15,7 +17,10 @@ use mollusk_svm::{
 use solana_account::{Account, ReadableAccount};
 use solana_instruction::{AccountMeta, Instruction};
 use solana_program_error::ProgramError;
+use solana_program_option::COption;
+use solana_program_pack::Pack;
 use solana_pubkey::Pubkey;
+use spl_token_interface::state::{Account as TokenAccount, AccountState, Mint};
 
 const OLD_MINT_BYTES: [u8; 32] = [41u8; 32];
 const NEW_MINT_BYTES: [u8; 32] = [42u8; 32];
@@ -69,7 +74,13 @@ fn setup_mollusk(program_id: &Pubkey) -> Option<Mollusk> {
     };
 
     env::set_var("SBF_OUT_DIR", &sbf_out_dir);
-    Some(Mollusk::new(program_id, "migrator_program"))
+    let mut mollusk = Mollusk::new(program_id, "migrator_program");
+    mollusk.add_program_with_loader_and_elf(
+        &Pubkey::new_from_array(TOKEN_PROGRAM_ID),
+        &loader_keys::LOADER_V2,
+        TOKENKEG_ELF,
+    );
+    Some(mollusk)
 }
 
 fn migration_config_from_bytes(data: &[u8]) -> MigrationConfig {
@@ -87,24 +98,31 @@ fn make_program_data_metadata(upgrade_authority: Pubkey) -> Vec<u8> {
 }
 
 fn make_mint_data(supply: u64, decimals: u8) -> Vec<u8> {
-    let mut data = vec![0u8; 82];
-    data[0..4].copy_from_slice(&0u32.to_le_bytes());
-    data[36..44].copy_from_slice(&supply.to_le_bytes());
-    data[44] = decimals;
-    data[45] = 1;
-    data[46..50].copy_from_slice(&0u32.to_le_bytes());
+    let mint = Mint {
+        mint_authority: COption::None,
+        supply,
+        decimals,
+        is_initialized: true,
+        freeze_authority: COption::None,
+    };
+    let mut data = vec![0u8; Mint::LEN];
+    Mint::pack(mint, &mut data).expect("mint pack");
     data
 }
 
 fn make_token_account_data(mint: &Pubkey, owner: &Pubkey, amount: u64) -> Vec<u8> {
-    let mut data = vec![0u8; 165];
-    data[0..32].copy_from_slice(mint.as_ref());
-    data[32..64].copy_from_slice(owner.as_ref());
-    data[64..72].copy_from_slice(&amount.to_le_bytes());
-    data[72..76].copy_from_slice(&0u32.to_le_bytes());
-    data[108] = 1;
-    data[121..129].copy_from_slice(&0u64.to_le_bytes());
-    data[129..133].copy_from_slice(&0u32.to_le_bytes());
+    let token_account = TokenAccount {
+        mint: Pubkey::new_from_array(*mint.as_array()),
+        owner: Pubkey::new_from_array(*owner.as_array()),
+        amount,
+        delegate: COption::None,
+        state: AccountState::Initialized,
+        is_native: COption::None,
+        delegated_amount: 0,
+        close_authority: COption::None,
+    };
+    let mut data = vec![0u8; TokenAccount::LEN];
+    TokenAccount::pack(token_account, &mut data).expect("token account pack");
     data
 }
 
@@ -290,7 +308,7 @@ fn base_accounts(program_id: Pubkey) -> FixtureAccounts {
                 rent_epoch: 0,
             },
         ),
-        (token_program, Account::default()),
+        (token_program, create_program_account_loader_v2(TOKENKEG_ELF)),
         (system_program, system_program_account),
         (loader_v1_program, loader_v1_program_account),
         (loader_v2_program, loader_v2_program_account),
@@ -447,6 +465,74 @@ fn mollusk_pause_then_migrate_stops_before_any_token_cpi() {
             &fixture.vault_new_qx
         )),
         reserve_before
+    );
+}
+
+#[test]
+fn mollusk_migrate_exact_executes_burn_and_transfer_cpis() {
+    let program_id = Pubkey::new_unique();
+    let Some(mollusk) = setup_mollusk(&program_id) else {
+        return;
+    };
+
+    let fixture = base_accounts(program_id);
+
+    let init_result = mollusk.process_and_validate_instruction(
+        &fixture.initialize_config_ix(0, i64::MAX, MIGRATION_CAP),
+        &fixture.accounts,
+        &[Check::success()],
+    );
+
+    let old_before = token_amount(account_by_key(
+        &init_result.resulting_accounts,
+        &fixture.user_old_qx,
+    ));
+    let new_before = token_amount(account_by_key(
+        &init_result.resulting_accounts,
+        &fixture.user_new_qx,
+    ));
+    let reserve_before = token_amount(account_by_key(
+        &init_result.resulting_accounts,
+        &fixture.vault_new_qx,
+    ));
+
+    let migrate_result = mollusk.process_and_validate_instruction(
+        &fixture.migrate_exact_ix(MIGRATION_AMOUNT),
+        &init_result.resulting_accounts,
+        &[Check::success()],
+    );
+
+    assert_eq!(
+        migrate_result.inner_instructions.len(),
+        2,
+        "migrate_exact should emit burn and transfer token CPIs",
+    );
+
+    let config = migration_config_from_bytes(
+        account_by_key(&migrate_result.resulting_accounts, &fixture.config_pda).data(),
+    );
+    assert_eq!(config.paused, 0);
+    assert_eq!(config.total_migrated, MIGRATION_AMOUNT);
+    assert_eq!(
+        token_amount(account_by_key(
+            &migrate_result.resulting_accounts,
+            &fixture.user_old_qx
+        )),
+        old_before - MIGRATION_AMOUNT
+    );
+    assert_eq!(
+        token_amount(account_by_key(
+            &migrate_result.resulting_accounts,
+            &fixture.user_new_qx
+        )),
+        new_before + MIGRATION_AMOUNT
+    );
+    assert_eq!(
+        token_amount(account_by_key(
+            &migrate_result.resulting_accounts,
+            &fixture.vault_new_qx
+        )),
+        reserve_before - MIGRATION_AMOUNT
     );
 }
 

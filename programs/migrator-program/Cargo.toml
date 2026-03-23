@@ -23,14 +23,18 @@ no-entrypoint = []
 [dev-dependencies]
 litesvm = "0.9"
 mollusk-svm = { version = "0.11.0", features = ["fuzz", "inner-instructions"] }
+mollusk-svm-programs-token = { version = "0.11.0", default-features = false, features = ["token"] }
 solana-account = "3.0"
 solana-address = { workspace = true }
 solana-instruction = "3.1"
 solana-keypair = "3.1"
 solana-message = "~3.0"
+solana-program-option = "3.1.0"
+solana-program-pack = "3.0"
 solana-program = { workspace = true }
 solana-program-error = "3.0"
 solana-pubkey = "3.0"
 solana-signer = "3.0"
 solana-transaction-error = "~3.0"
 solana-transaction = { version = "~3.0", features = ["verify"] }
+spl-token-interface = "2.0.0"
