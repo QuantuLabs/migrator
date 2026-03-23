@@ -2285,7 +2285,7 @@ fn migrate_exact_rolls_back_burn_when_transfer_signing_fails() {
 }
 
 #[test]
-fn withdraw_unclaimed_transfers_remaining_reserve_to_fixed_refund_recipient() {
+fn withdraw_unclaimed_sweeps_full_vault_balance_to_fixed_refund_recipient() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
     };
@@ -2294,20 +2294,18 @@ fn withdraw_unclaimed_transfers_remaining_reserve_to_fixed_refund_recipient() {
     fixture.send_migrate_exact(MIGRATION_AMOUNT);
     fixture.set_config_window(-1, -1);
 
-    let unclaimed_amount = fixture.config().migration_cap() - fixture.config().total_migrated;
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let surplus_amount = 7;
+    let reserve_before = fixture.token_balance(&fixture.vault_new_qx) + surplus_amount;
+    fixture.set_token_balance(fixture.vault_new_qx, reserve_before);
     let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
     let user_new_before = fixture.token_balance(&fixture.user_new_qx);
 
     fixture.send_withdraw_unclaimed();
 
-    assert_eq!(
-        fixture.token_balance(&fixture.vault_new_qx),
-        reserve_before - unclaimed_amount
-    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), 0);
     assert_eq!(
         fixture.token_balance(&fixture.refund_recipient_new_qx),
-        refund_before + unclaimed_amount
+        refund_before + reserve_before
     );
     assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
     assert_eq!(fixture.config().total_migrated, MIGRATION_AMOUNT);
@@ -2447,7 +2445,6 @@ fn withdraw_unclaimed_is_permissionless_and_still_pays_fixed_refund_recipient() 
     fixture.send_initialize_config(0, 10);
     fixture.send_migrate_exact(MIGRATION_AMOUNT);
     fixture.set_config_window(-1, -1);
-    let unclaimed_amount = fixture.config().migration_cap() - fixture.config().total_migrated;
     let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
     let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
     let user_new_before = fixture.token_balance(&fixture.user_new_qx);
@@ -2461,20 +2458,17 @@ fn withdraw_unclaimed_is_permissionless_and_still_pays_fixed_refund_recipient() 
         .send_withdraw_unclaimed_result_with_payer(&third_party)
         .expect("permissionless withdraw_unclaimed should succeed");
 
-    assert_eq!(
-        fixture.token_balance(&fixture.vault_new_qx),
-        reserve_before - unclaimed_amount
-    );
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), 0);
     assert_eq!(
         fixture.token_balance(&fixture.refund_recipient_new_qx),
-        refund_before + unclaimed_amount
+        refund_before + reserve_before
     );
     assert_eq!(fixture.token_balance(&fixture.user_new_qx), user_new_before);
     assert!(fixture.config().unclaimed_withdrawn());
 }
 
 #[test]
-fn withdraw_unclaimed_rejects_when_vault_is_underfunded_without_mutation() {
+fn withdraw_unclaimed_sweeps_remaining_balance_when_vault_is_underfunded() {
     let Some(mut fixture) = MigrationFlowFixture::setup() else {
         return;
     };
@@ -2482,23 +2476,25 @@ fn withdraw_unclaimed_rejects_when_vault_is_underfunded_without_mutation() {
     fixture.send_initialize_config(0, 10);
     fixture.send_migrate_exact(MIGRATION_AMOUNT);
     fixture.set_config_window(-1, -1);
-    let unclaimed_amount = fixture.config().migration_cap() - fixture.config().total_migrated;
-    fixture.set_token_balance(fixture.vault_new_qx, unclaimed_amount - 1);
-    let reserve_before = fixture.token_balance(&fixture.vault_new_qx);
+    let reserve_before = fixture
+        .config()
+        .migration_cap()
+        .checked_sub(fixture.config().total_migrated)
+        .unwrap()
+        - 1;
+    fixture.set_token_balance(fixture.vault_new_qx, reserve_before);
     let refund_before = fixture.token_balance(&fixture.refund_recipient_new_qx);
     let total_before = fixture.config().total_migrated;
 
-    assert_tx_error(
-        fixture.send_withdraw_unclaimed_result(),
-        custom_error(MigrationError::InsufficientVaultLiquidity),
-    );
-    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), reserve_before);
+    fixture.send_withdraw_unclaimed();
+
+    assert_eq!(fixture.token_balance(&fixture.vault_new_qx), 0);
     assert_eq!(
         fixture.token_balance(&fixture.refund_recipient_new_qx),
-        refund_before
+        refund_before + reserve_before
     );
     assert_eq!(fixture.config().total_migrated, total_before);
-    assert!(!fixture.config().unclaimed_withdrawn());
+    assert!(fixture.config().unclaimed_withdrawn());
 }
 
 #[test]

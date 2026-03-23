@@ -146,8 +146,8 @@ That means:
 
 That means:
 
-- it transfers only the unclaimed approved migration amount: `migration_cap - total_migrated`
-- it does not sweep arbitrary overfunding that may still sit in the reserve ATA
+- it sweeps the entire reserve ATA balance after expiry, not just `migration_cap - total_migrated`
+- any post-init surplus sent into the reserve ATA is not usable during migration and is returned only at closeout
 - it is permissionless to trigger once the window is over
 - it marks the closeout as one-shot on-chain
 - it sends the reclaimed amount to the canonical ATA for the configured refund wallet

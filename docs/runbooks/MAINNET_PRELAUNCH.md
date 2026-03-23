@@ -63,7 +63,7 @@ Verify and publish these exact addresses:
 - funding token account owner is the reviewed funding wallet
 - funding token account mint is the final `new QX` mint
 - funding token account delegate and close-authority controls are cleared
-- init funding is exact; V1 closeout returns only `migration_cap - total_migrated`
+- init funding is exact; V1 closeout sweeps the full reserve-vault balance after expiry, including any accidental surplus
 - deployed binary hash or exact build artifact path is recorded
 - verified-build metadata artifact is recorded
 - verified-build lane was run from a clean tracked git state

@@ -63,15 +63,8 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
     let _ = validate_new_mint_account(new_qx_mint, &config.new_qx_mint)?;
 
     let refund_recipient = Address::new_from_array(config.refund_recipient());
-    let unclaimed_amount = config
-        .migration_cap()
-        .checked_sub(config.total_migrated)
-        .ok_or(MigrationError::MigrationCapExceeded)?;
-    if unclaimed_amount == 0 {
-        return Err(MigrationError::InsufficientVaultLiquidity.into());
-    }
 
-    let vault_balance = unsafe {
+    let closeout_amount = unsafe {
         validate_custody_token_account(vault_new_qx, &config.new_qx_mint, &config.vault_authority)?;
         validate_destination_token_account(
             refund_recipient_new_qx,
@@ -80,7 +73,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         )?;
         token_amount(vault_new_qx)?
     };
-    if vault_balance < unclaimed_amount {
+    if closeout_amount == 0 {
         return Err(MigrationError::InsufficientVaultLiquidity.into());
     }
 
@@ -95,7 +88,7 @@ pub fn process(program_id: &Address, accounts: &[AccountView], data: &[u8]) -> P
         from: vault_new_qx,
         to: refund_recipient_new_qx,
         authority: vault_authority,
-        amount: unclaimed_amount,
+        amount: closeout_amount,
     }
     .invoke_signed(core::slice::from_ref(&vault_signer))?;
 

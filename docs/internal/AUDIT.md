@@ -84,12 +84,13 @@ Current verification coverage:
 - `LiteSVM` rollback when post-burn transfer signing fails
 - `LiteSVM` invalid init window rejection
 - `LiteSVM` unauthorized pause rejection
-- `LiteSVM` withdraw_unclaimed happy path for exact `migration_cap - total_migrated`
+- `LiteSVM` withdraw_unclaimed happy path for full-vault sweep after expiry
 - `LiteSVM` withdraw_unclaimed before-deadline rejection
 - `LiteSVM` withdraw_unclaimed exact-boundary rejection with rollback invariants
 - `LiteSVM` withdraw_unclaimed wrong-destination rejection
 - `LiteSVM` withdraw_unclaimed wrong-vault rejection
-- `LiteSVM` withdraw_unclaimed underfunded-vault rejection with rollback invariants
+- `LiteSVM` withdraw_unclaimed sweep with extra surplus present in the vault
+- `LiteSVM` withdraw_unclaimed sweep of the remaining vault balance even when the vault is underfunded vs. `migration_cap - total_migrated`
 - `LiteSVM` withdraw_unclaimed permissionless third-party caller success path
 - `LiteSVM` withdraw_unclaimed one-shot rejection after the closeout flag is set
 - `Mollusk` withdraw_unclaimed happy path and strict-deadline rejection

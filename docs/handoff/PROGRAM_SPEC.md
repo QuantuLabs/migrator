@@ -26,7 +26,7 @@ Token policy:
 7. V1 is open to any live holder of burnable `old QX`; there is no on-chain allowlist or Merkle root.
 8. No late-claim penalty in V1.
 9. No admin instruction can change the ratio or swap the mint addresses after initialization.
-10. After expiry, V1 can return only the still-unclaimed approved migration amount back to the configured refund wallet.
+10. After expiry, V1 sweeps the full reserve-vault balance back to the configured refund wallet.
 
 ## Instructions
 
@@ -177,11 +177,11 @@ Required checks:
 - destination account owner equals the configured `refund_recipient`
 - destination account mint equals `new QX`
 - destination account address equals the canonical ATA for `(refund_recipient, new QX mint)`
-- `vault balance >= migration_cap - total_migrated`
+- `vault balance > 0`
 
 Effects:
 
-1. transfer exactly `migration_cap - total_migrated` from reserve vault to the configured refund ATA
+1. transfer the full current reserve-vault balance from the reserve vault to the configured refund ATA
 2. set the one-shot `unclaimed_withdrawn` flag
 3. emit closeout log marker
 
