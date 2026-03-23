@@ -46,8 +46,8 @@ mkdir -p "$OUT_DIR"
 pushd "$ROOT_DIR" >/dev/null
 
 if [[ "$ALLOW_DIRTY_WORKTREE" != "1" ]]; then
-  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-    echo "[verified-build] tracked git changes detected; commit or stash before producing release metadata" >&2
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "[verified-build] git worktree is not clean; commit, stash, or remove local changes before producing release metadata" >&2
     echo "[verified-build] set ALLOW_DIRTY_WORKTREE=1 only for local debugging, never for release artifacts" >&2
     exit 1
   fi
@@ -70,6 +70,7 @@ DOCKER_DEFAULT_PLATFORM="$DOCKER_PLATFORM" solana-verify "${BUILD_ARGS[@]}"
 popd >/dev/null
 
 PROGRAM_SO="$ROOT_DIR/target/deploy/${LIBRARY_NAME}.so"
+PROGRAM_SO_REL="target/deploy/${LIBRARY_NAME}.so"
 if [[ ! -f "$PROGRAM_SO" ]]; then
   echo "[verified-build] expected artifact missing: $PROGRAM_SO" >&2
   exit 1
@@ -105,7 +106,7 @@ cat > "$BUILD_INFO_PATH" <<EOF
   "mountBaseDir": "$MOUNT_BASE_DIR",
   "mountPath": "$MOUNT_DIR",
   "dockerPlatform": "$DOCKER_PLATFORM",
-  "programSoPath": "$PROGRAM_SO",
+  "programSoPath": "$PROGRAM_SO_REL",
   "executableHash": "$EXECUTABLE_HASH",
   "programId": $PROGRAM_ID_JSON,
   "onChainHash": $ON_CHAIN_HASH,

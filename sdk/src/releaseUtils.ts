@@ -11,6 +11,7 @@ export const TOKEN_ACCOUNT_LEN = 165;
 export const PROGRAMDATA_METADATA_LEN = 45;
 export const PROGRAMDATA_DISCRIMINATOR = 3;
 export const MAINNET_BETA_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+export const NATIVE_MINT_BASE58 = "So11111111111111111111111111111111111111112";
 
 export type ReviewedBuildInfo = {
   generatedAt: string;
@@ -95,6 +96,31 @@ export function resolveRepoRoot(metaUrl: string): string {
 
 export function resolveLocalPath(basePath: string, targetPath: string): string {
   return resolvePath(basePath, targetPath);
+}
+
+export function isDirectCliInvocation(metaUrl: string, argv: readonly string[] = process.argv): boolean {
+  const entrypoint = argv[1];
+  if (!entrypoint) {
+    return false;
+  }
+
+  return resolvePath(entrypoint) === fileURLToPath(metaUrl);
+}
+
+export async function runCliMain(
+  metaUrl: string,
+  main: () => Promise<void>,
+): Promise<void> {
+  if (!isDirectCliInvocation(metaUrl)) {
+    return;
+  }
+
+  try {
+    await main();
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
 }
 
 export function readReviewedBuildInfo(buildInfoPath: string): ReviewedBuildInfo {

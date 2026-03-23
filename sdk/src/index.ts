@@ -1,6 +1,9 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+  "ATokenGPvbdGVxr1b2hvZbsiW5xWH25efTNsLJA8knL",
+);
 export const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
   "BPFLoaderUpgradeab1e11111111111111111111111",
 );
@@ -35,6 +38,17 @@ export function findMigrationConfigPda(programId: PublicKey): [PublicKey, number
 
 export function findVaultAuthorityPda(programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([VAULT_AUTHORITY_SEED], programId);
+}
+
+export function findAssociatedTokenAddress(
+  owner: PublicKey,
+  mint: PublicKey,
+  tokenProgramId: PublicKey = TOKEN_PROGRAM_ID,
+): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), tokenProgramId.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  )[0];
 }
 
 export function findProgramDataPda(programId: PublicKey): [PublicKey, number] {
@@ -143,8 +157,8 @@ export function buildMigrateExactIx(params: {
 }
 
 export function decodeMigrationConfig(data: Buffer): MigrationConfig {
-  if (data.length < MIGRATION_CONFIG_SIZE) {
-    throw new Error(`MigrationConfig too small: expected at least ${MIGRATION_CONFIG_SIZE} bytes`);
+  if (data.length !== MIGRATION_CONFIG_SIZE) {
+    throw new Error(`MigrationConfig must be exactly ${MIGRATION_CONFIG_SIZE} bytes, got ${data.length}`);
   }
   if (!data.subarray(0, 8).equals(MIGRATION_CONFIG_DISCRIMINATOR)) {
     throw new Error("Invalid MigrationConfig discriminator");

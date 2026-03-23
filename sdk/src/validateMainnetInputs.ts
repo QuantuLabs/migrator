@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 
-import { Commitment, Connection, PublicKey } from "@solana/web3.js";
+import type { Commitment } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 
 import {
     BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
@@ -15,6 +16,7 @@ import {
 import {
     computeExecutableHash,
     isMainnetBetaGenesisHash,
+    NATIVE_MINT_BASE58,
     parseMintData,
     parseProgramData,
     parseTokenAccountData,
@@ -23,14 +25,14 @@ import {
     resolveLocalPath,
     resolveCommitment,
     resolveRepoRoot,
+    runCliMain,
     verifyFundingSignature,
 } from "./releaseUtils.ts";
 
 const PROGRAM_ACCOUNT_METADATA_LEN = 36;
 const PROGRAM_DISCRIMINATOR = 2;
-const NATIVE_MINT_BASE58 = "So11111111111111111111111111111111111111112";
 
-type VerifiedBuildInputs = {
+export type VerifiedBuildInputs = {
   libraryName: string;
   mountPath: string;
   arch: string;
@@ -41,7 +43,7 @@ type VerifiedBuildInputs = {
   commitHash: string;
 };
 
-type MainnetInputs = {
+export type MainnetInputs = {
   cluster: string;
   rpcUrl: string;
   expectConfigInitialized: boolean;
@@ -101,7 +103,7 @@ function asInteger(value: unknown, label: string): number {
   return value;
 }
 
-function parseInputs(raw: unknown): MainnetInputs {
+export function parseInputs(raw: unknown): MainnetInputs {
   const record = asRecord(raw, "mainnet inputs");
   const verifiedBuild = asRecord(record.verifiedBuild, "verifiedBuild");
 
@@ -152,7 +154,7 @@ function parseInputs(raw: unknown): MainnetInputs {
   };
 }
 
-function parseProgramAccount(data: Buffer) {
+export function parseProgramAccount(data: Buffer) {
   if (data.length < PROGRAM_ACCOUNT_METADATA_LEN) {
     throw new Error(
       `Program account too short: expected at least ${PROGRAM_ACCOUNT_METADATA_LEN}, got ${data.length}`,
@@ -165,7 +167,202 @@ function parseProgramAccount(data: Buffer) {
   };
 }
 
-async function main() {
+type MainnetChecksContext = {
+  inputs: MainnetInputs;
+  programId: PublicKey;
+  observedGenesisHash: string;
+  expectedUpgradeAuthority: string | null;
+  migrationCapRaw: bigint;
+  eligibleRawUnits: bigint;
+  startTs: bigint;
+  endTs: bigint;
+  expectedTotalMigratedRaw: bigint;
+  configPda: PublicKey;
+  vaultAuthorityPda: PublicKey;
+  programDataPda: PublicKey;
+  configBump: number;
+  vaultAuthorityBump: number;
+  programInfo: { owner: PublicKey; executable: boolean };
+  programDataInfo: { owner: PublicKey };
+  oldMintInfo: { owner: PublicKey };
+  mintInfo: { owner: PublicKey };
+  reserveInfo: { owner: PublicKey };
+  configInfo: { owner: PublicKey; dataLength: number } | null;
+  parsedProgram: ReturnType<typeof parseProgramAccount>;
+  parsedProgramData: ReturnType<typeof parseProgramData>;
+  parsedOldMint: ReturnType<typeof parseMintData>;
+  parsedMint: ReturnType<typeof parseMintData>;
+  parsedReserve: ReturnType<typeof parseTokenAccountData>;
+  parsedConfig: ReturnType<typeof decodeMigrationConfig> | null;
+  fundingStatus: { err: unknown; confirmationStatus?: string | null } | null;
+  fundingObservation: {
+    reserveVaultSeen: boolean;
+    mintMatchesExpected: boolean;
+    reserveDeltaRaw: string | null;
+  } | null;
+  executableHash: string;
+  reviewedBuildInfo: ReturnType<typeof readReviewedBuildInfo>;
+  resolvedProgramSoPath: string;
+  oldQxMint: PublicKey;
+  newQxMint: PublicKey;
+  reserveVault: PublicKey;
+  opsAdmin: PublicKey;
+  initializerAuthority: PublicKey;
+};
+
+export function buildMainnetChecks(ctx: MainnetChecksContext) {
+  return {
+    clusterManifestRequestsMainnetBeta: ctx.inputs.cluster === "mainnet-beta",
+    clusterGenesisHashMatchesMainnetBeta: isMainnetBetaGenesisHash(ctx.observedGenesisHash),
+    migrationWindowIsValid: ctx.startTs <= ctx.endTs,
+    migrationCapEqualsEligibleRawUnits: ctx.migrationCapRaw === ctx.eligibleRawUnits,
+    initializerMatchesExpectedUpgradeAuthority:
+      ctx.expectedUpgradeAuthority === null
+        ? ctx.inputs.expectConfigInitialized
+        : ctx.initializerAuthority.toBase58() === ctx.expectedUpgradeAuthority,
+    verifiedBuildLibraryNameMatches: ctx.inputs.verifiedBuild.libraryName === "migrator_program",
+    verifiedBuildMountPathPresent: ctx.inputs.verifiedBuild.mountPath.length > 0,
+    verifiedBuildProgramSoPathPresent: ctx.inputs.verifiedBuild.programSoPath.length > 0,
+    verifiedBuildExecutableHashMatches:
+      ctx.executableHash.toLowerCase() ===
+      ctx.inputs.verifiedBuild.expectedExecutableHash.toLowerCase(),
+    reviewedBuildInfoCommitMatchesManifest:
+      ctx.reviewedBuildInfo.gitCommit.toLowerCase() ===
+      ctx.inputs.verifiedBuild.commitHash.toLowerCase(),
+    reviewedBuildInfoLibraryNameMatchesManifest:
+      ctx.reviewedBuildInfo.libraryName === ctx.inputs.verifiedBuild.libraryName,
+    reviewedBuildInfoArchMatchesManifest:
+      ctx.reviewedBuildInfo.arch === ctx.inputs.verifiedBuild.arch,
+    reviewedBuildInfoProgramSoPathMatchesManifest:
+      ctx.reviewedBuildInfo.programSoPath === ctx.inputs.verifiedBuild.programSoPath,
+    reviewedBuildInfoExecutableHashMatchesManifest:
+      ctx.reviewedBuildInfo.executableHash.toLowerCase() ===
+      ctx.inputs.verifiedBuild.expectedExecutableHash.toLowerCase(),
+    reviewedBuildInfoExecutableHashMatchesLocal:
+      ctx.reviewedBuildInfo.executableHash.toLowerCase() === ctx.executableHash.toLowerCase(),
+    programOwnedByUpgradeableLoader:
+      ctx.programInfo.owner.equals(BPF_LOADER_UPGRADEABLE_PROGRAM_ID),
+    programExecutable: ctx.programInfo.executable,
+    programStateDiscriminatorMatches:
+      ctx.parsedProgram.stateDiscriminator === PROGRAM_DISCRIMINATOR,
+    programProgramDataMatchesDerived:
+      ctx.parsedProgram.programDataAddress === ctx.programDataPda.toBase58(),
+    programDataOwnedByUpgradeableLoader:
+      ctx.programDataInfo.owner.equals(BPF_LOADER_UPGRADEABLE_PROGRAM_ID),
+    programDataStateDiscriminatorMatches:
+      ctx.parsedProgramData.stateDiscriminator === PROGRAMDATA_DISCRIMINATOR,
+    expectedUpgradeAuthorityMatchesProgramData:
+      ctx.expectedUpgradeAuthority === null
+        ? ctx.parsedProgramData.authority === null
+        : ctx.parsedProgramData.authority === ctx.expectedUpgradeAuthority,
+    mintOwnedByTokenkeg: ctx.mintInfo.owner.equals(TOKEN_PROGRAM_ID),
+    mintInitialized: ctx.parsedMint.isInitialized,
+    mintAuthorityDisabled: ctx.parsedMint.mintAuthorityOption === 0,
+    freezeAuthorityDisabled: ctx.parsedMint.freezeAuthorityOption === 0,
+    decimalsMatchExpected: ctx.parsedMint.decimals === ctx.inputs.expectedDecimals,
+    oldMintOwnedByTokenkeg: ctx.oldMintInfo.owner.equals(TOKEN_PROGRAM_ID),
+    oldMintInitialized: ctx.parsedOldMint.isInitialized,
+    oldMintAuthorityDisabled: ctx.parsedOldMint.mintAuthorityOption === 0,
+    oldFreezeAuthorityDisabled: ctx.parsedOldMint.freezeAuthorityOption === 0,
+    oldMintDecimalsMatchExpected: ctx.parsedOldMint.decimals === ctx.inputs.expectedDecimals,
+    oldMintIsNotNativeMint: ctx.oldQxMint.toBase58() !== NATIVE_MINT_BASE58,
+    oldMintDiffersFromNewMint: ctx.oldQxMint.toBase58() !== ctx.newQxMint.toBase58(),
+    newMintIsNotNativeMint: ctx.newQxMint.toBase58() !== NATIVE_MINT_BASE58,
+    reserveOwnedByTokenkeg: ctx.reserveInfo.owner.equals(TOKEN_PROGRAM_ID),
+    reserveMintMatchesNewMint: ctx.parsedReserve.mint === ctx.newQxMint.toBase58(),
+    reserveOwnerMatchesVaultAuthority:
+      ctx.parsedReserve.owner === ctx.vaultAuthorityPda.toBase58(),
+    reserveInitialized: ctx.parsedReserve.state === 1,
+    reserveDelegateCleared: ctx.parsedReserve.delegateOption === 0,
+    reserveDelegatedAmountCleared: ctx.parsedReserve.delegatedAmount === 0n,
+    reserveCloseAuthorityCleared: ctx.parsedReserve.closeAuthorityOption === 0,
+    reserveCoversEligibleRawUnits: ctx.parsedReserve.amount >= ctx.eligibleRawUnits,
+    fundingSignatureSucceeded:
+      ctx.inputs.fundingSignature === null
+        ? null
+        : ctx.fundingStatus !== null && ctx.fundingStatus.err === null,
+    fundingSignatureFinalized:
+      ctx.inputs.fundingSignature === null
+        ? null
+        : ctx.fundingStatus !== null && ctx.fundingStatus.confirmationStatus === "finalized",
+    fundingSignatureTouchesReserveVault:
+      ctx.inputs.fundingSignature === null
+        ? null
+        : ctx.fundingObservation?.reserveVaultSeen === true,
+    fundingSignatureMintMatchesNewMint:
+      ctx.inputs.fundingSignature === null
+        ? null
+        : ctx.fundingObservation?.mintMatchesExpected === true,
+    fundingSignatureDeltaPositive:
+      ctx.inputs.fundingSignature === null
+        ? null
+        : BigInt(ctx.fundingObservation?.reserveDeltaRaw ?? "0") > 0n,
+    configPresentWhenExpected: ctx.inputs.expectConfigInitialized ? ctx.configInfo !== null : null,
+    configAbsentBeforeInit: ctx.inputs.expectConfigInitialized ? null : ctx.configInfo === null,
+    configOwnedByProgram:
+      ctx.inputs.expectConfigInitialized && ctx.configInfo
+        ? ctx.configInfo.owner.equals(ctx.programId)
+        : null,
+    configLengthMatches:
+      ctx.inputs.expectConfigInitialized && ctx.configInfo
+        ? ctx.configInfo.dataLength === MIGRATION_CONFIG_SIZE
+        : null,
+    configOldMintMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.oldQxMint.equals(ctx.oldQxMint)
+        : null,
+    configNewMintMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.newQxMint.equals(ctx.newQxMint)
+        : null,
+    configReserveVaultMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.vaultNewQx.equals(ctx.reserveVault)
+        : null,
+    configAdminMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.admin.equals(ctx.opsAdmin)
+        : null,
+    configTokenProgramMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.tokenProgramId.equals(TOKEN_PROGRAM_ID)
+        : null,
+    configVaultAuthorityMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.vaultAuthority.equals(ctx.vaultAuthorityPda)
+        : null,
+    configBumpMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.bump === ctx.configBump
+        : null,
+    configVaultAuthorityBumpMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.vaultAuthorityBump === ctx.vaultAuthorityBump
+        : null,
+    configMigrationCapMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.migrationCap === ctx.migrationCapRaw
+        : null,
+    configStartTsMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.startTs === ctx.startTs
+        : null,
+    configEndTsMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.endTs === ctx.endTs
+        : null,
+    configPausedMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.paused === ctx.inputs.expectedPaused
+        : null,
+    configTotalMigratedMatches:
+      ctx.inputs.expectConfigInitialized && ctx.parsedConfig
+        ? ctx.parsedConfig.totalMigrated === ctx.expectedTotalMigratedRaw
+        : null,
+  };
+}
+
+export async function main() {
   const inputsPathArg = process.argv[2];
   if (!inputsPathArg) {
     throw new Error(
@@ -283,133 +480,61 @@ async function main() {
   const fundingStatus = inputs.fundingSignature ? fundingStatuses?.value[0] ?? null : null;
   const executableHash = computeExecutableHash(resolvedProgramSoPath);
 
-  const checks = {
-    clusterManifestRequestsMainnetBeta: inputs.cluster === "mainnet-beta",
-    clusterGenesisHashMatchesMainnetBeta: isMainnetBetaGenesisHash(observedGenesisHash),
-    migrationWindowIsValid: startTs <= endTs,
-    migrationCapEqualsEligibleRawUnits: migrationCapRaw === eligibleRawUnits,
-    initializerMatchesExpectedUpgradeAuthority:
-      expectedUpgradeAuthority === null
-        ? inputs.expectConfigInitialized
-        : initializerAuthority.toBase58() === expectedUpgradeAuthority,
-    verifiedBuildLibraryNameMatches: inputs.verifiedBuild.libraryName === "migrator_program",
-    verifiedBuildMountPathPresent: inputs.verifiedBuild.mountPath.length > 0,
-    verifiedBuildProgramSoPathPresent: inputs.verifiedBuild.programSoPath.length > 0,
-    verifiedBuildExecutableHashMatches:
-      executableHash.toLowerCase() === inputs.verifiedBuild.expectedExecutableHash.toLowerCase(),
-    reviewedBuildInfoCommitMatchesManifest:
-      reviewedBuildInfo.gitCommit.toLowerCase() === inputs.verifiedBuild.commitHash.toLowerCase(),
-    reviewedBuildInfoLibraryNameMatchesManifest:
-      reviewedBuildInfo.libraryName === inputs.verifiedBuild.libraryName,
-    reviewedBuildInfoArchMatchesManifest: reviewedBuildInfo.arch === inputs.verifiedBuild.arch,
-    reviewedBuildInfoProgramSoPathMatchesManifest:
-      reviewedBuildInfo.programSoPath === resolvedProgramSoPath,
-    reviewedBuildInfoExecutableHashMatchesManifest:
-      reviewedBuildInfo.executableHash.toLowerCase() ===
-      inputs.verifiedBuild.expectedExecutableHash.toLowerCase(),
-    reviewedBuildInfoExecutableHashMatchesLocal:
-      reviewedBuildInfo.executableHash.toLowerCase() === executableHash.toLowerCase(),
-    programOwnedByUpgradeableLoader: programInfo.owner.equals(BPF_LOADER_UPGRADEABLE_PROGRAM_ID),
-    programExecutable: programInfo.executable,
-    programStateDiscriminatorMatches: parsedProgram.stateDiscriminator === PROGRAM_DISCRIMINATOR,
-    programProgramDataMatchesDerived:
-      parsedProgram.programDataAddress === programDataPda.toBase58(),
-    programDataOwnedByUpgradeableLoader: programDataInfo.owner.equals(
-      BPF_LOADER_UPGRADEABLE_PROGRAM_ID,
-    ),
-    programDataStateDiscriminatorMatches:
-      parsedProgramData.stateDiscriminator === PROGRAMDATA_DISCRIMINATOR,
-    expectedUpgradeAuthorityMatchesProgramData:
-      expectedUpgradeAuthority === null
-        ? parsedProgramData.authority === null
-        : parsedProgramData.authority === expectedUpgradeAuthority,
-    mintOwnedByTokenkeg: mintInfo.owner.equals(TOKEN_PROGRAM_ID),
-    mintInitialized: parsedMint.isInitialized,
-    mintAuthorityDisabled: parsedMint.mintAuthorityOption === 0,
-    freezeAuthorityDisabled: parsedMint.freezeAuthorityOption === 0,
-    decimalsMatchExpected: parsedMint.decimals === inputs.expectedDecimals,
-    oldMintOwnedByTokenkeg: oldMintInfo.owner.equals(TOKEN_PROGRAM_ID),
-    oldMintInitialized: parsedOldMint.isInitialized,
-    oldMintAuthorityDisabled: parsedOldMint.mintAuthorityOption === 0,
-    oldFreezeAuthorityDisabled: parsedOldMint.freezeAuthorityOption === 0,
-    oldMintDecimalsMatchExpected: parsedOldMint.decimals === inputs.expectedDecimals,
-    oldMintIsNotNativeMint: oldQxMint.toBase58() !== NATIVE_MINT_BASE58,
-    oldMintDiffersFromNewMint: oldQxMint.toBase58() !== newQxMint.toBase58(),
-    reserveOwnedByTokenkeg: reserveInfo.owner.equals(TOKEN_PROGRAM_ID),
-    reserveMintMatchesNewMint: parsedReserve.mint === newQxMint.toBase58(),
-    reserveOwnerMatchesVaultAuthority: parsedReserve.owner === vaultAuthorityPda.toBase58(),
-    reserveInitialized: parsedReserve.state === 1,
-    reserveDelegateCleared: parsedReserve.delegateOption === 0,
-    reserveDelegatedAmountCleared: parsedReserve.delegatedAmount === 0n,
-    reserveCloseAuthorityCleared: parsedReserve.closeAuthorityOption === 0,
-    reserveCoversEligibleRawUnits: parsedReserve.amount >= eligibleRawUnits,
-    fundingSignatureSucceeded:
-      inputs.fundingSignature === null ? null : fundingStatus !== null && fundingStatus.err === null,
-    fundingSignatureFinalized:
-      inputs.fundingSignature === null
+  const checks = buildMainnetChecks({
+    inputs,
+    programId,
+    observedGenesisHash,
+    expectedUpgradeAuthority,
+    migrationCapRaw,
+    eligibleRawUnits,
+    startTs,
+    endTs,
+    expectedTotalMigratedRaw,
+    configPda,
+    vaultAuthorityPda,
+    programDataPda,
+    configBump,
+    vaultAuthorityBump,
+    programInfo: {
+      owner: programInfo.owner,
+      executable: programInfo.executable,
+    },
+    programDataInfo: {
+      owner: programDataInfo.owner,
+    },
+    oldMintInfo: {
+      owner: oldMintInfo.owner,
+    },
+    mintInfo: {
+      owner: mintInfo.owner,
+    },
+    reserveInfo: {
+      owner: reserveInfo.owner,
+    },
+    configInfo:
+      configInfo === null
         ? null
-        : fundingStatus !== null && fundingStatus.confirmationStatus === "finalized",
-    fundingSignatureTouchesReserveVault:
-      inputs.fundingSignature === null ? null : fundingObservation?.reserveVaultSeen === true,
-    fundingSignatureMintMatchesNewMint:
-      inputs.fundingSignature === null ? null : fundingObservation?.mintMatchesExpected === true,
-    fundingSignatureDeltaPositive:
-      inputs.fundingSignature === null
-        ? null
-        : BigInt(fundingObservation?.reserveDeltaRaw ?? "0") > 0n,
-    configPresentWhenExpected: inputs.expectConfigInitialized ? configInfo !== null : null,
-    configAbsentBeforeInit: inputs.expectConfigInitialized ? null : configInfo === null,
-    configOwnedByProgram:
-      inputs.expectConfigInitialized && configInfo ? configInfo.owner.equals(programId) : null,
-    configLengthMatches:
-      inputs.expectConfigInitialized && configInfo
-        ? configInfo.data.length === MIGRATION_CONFIG_SIZE
-        : null,
-    configOldMintMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.oldQxMint.equals(oldQxMint)
-        : null,
-    configNewMintMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.newQxMint.equals(newQxMint)
-        : null,
-    configReserveVaultMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.vaultNewQx.equals(reserveVault)
-        : null,
-    configAdminMatches:
-      inputs.expectConfigInitialized && parsedConfig ? parsedConfig.admin.equals(opsAdmin) : null,
-    configTokenProgramMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.tokenProgramId.equals(TOKEN_PROGRAM_ID)
-        : null,
-    configVaultAuthorityMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.vaultAuthority.equals(vaultAuthorityPda)
-        : null,
-    configBumpMatches:
-      inputs.expectConfigInitialized && parsedConfig ? parsedConfig.bump === configBump : null,
-    configVaultAuthorityBumpMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.vaultAuthorityBump === vaultAuthorityBump
-        : null,
-    configMigrationCapMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.migrationCap === migrationCapRaw
-        : null,
-    configStartTsMatches:
-      inputs.expectConfigInitialized && parsedConfig ? parsedConfig.startTs === startTs : null,
-    configEndTsMatches:
-      inputs.expectConfigInitialized && parsedConfig ? parsedConfig.endTs === endTs : null,
-    configPausedMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.paused === inputs.expectedPaused
-        : null,
-    configTotalMigratedMatches:
-      inputs.expectConfigInitialized && parsedConfig
-        ? parsedConfig.totalMigrated === expectedTotalMigratedRaw
-        : null,
-  };
+        : {
+            owner: configInfo.owner,
+            dataLength: configInfo.data.length,
+          },
+    parsedProgram,
+    parsedProgramData,
+    parsedOldMint,
+    parsedMint,
+    parsedReserve,
+    parsedConfig,
+    fundingStatus,
+    fundingObservation,
+    executableHash,
+    reviewedBuildInfo,
+    resolvedProgramSoPath,
+    oldQxMint,
+    newQxMint,
+    reserveVault,
+    opsAdmin,
+    initializerAuthority,
+  });
   const ok = Object.values(checks).every((value) => value !== false);
 
   console.log(
@@ -497,7 +622,4 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+void runCliMain(import.meta.url, main);
