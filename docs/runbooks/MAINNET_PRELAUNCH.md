@@ -47,7 +47,7 @@ Verify and publish these exact addresses:
 - reserve proof script passes with the approved migration-cap input
 - dry-run validator proves the derived config PDA is absent before init
 - approved migration-cap input exactly matches the `migration_cap` that will be initialized on-chain
-- reviewed dry-run manifest is re-run against at least one second independent mainnet RPC before sign-off
+- reviewed dry-run manifest is re-run via the quorum lane against the reviewed `2` or `3` provider set before sign-off
 - config PDA and vault PDA re-derive correctly from the chosen program id
 - reserve vault owner is the vault PDA
 - reserve vault mint is the final `new QX` mint
@@ -55,6 +55,8 @@ Verify and publish these exact addresses:
 - deployed binary hash or exact build artifact path is recorded
 - verified-build metadata artifact is recorded
 - verified-build lane was run from a clean tracked git state
+- dry-run quorum artifact directory is recorded
+- post-init replay sequencing is fixed before any user claim traffic is allowed
 
 ## Product Checks
 
@@ -84,6 +86,8 @@ Verify and publish these exact addresses:
 - the wallet allowed to call `initialize_config` is recorded
 - ops admin recorded in config matches the intended pause authority
 - reviewed dry-run manifest returns exit `0`
+- the quorum artifact records the exact provider set used for sign-off
+- if post-init replay is required, it is scheduled before unpausing claims
 
 ## Final Go/No-Go
 
@@ -99,5 +103,6 @@ Go only if:
 - every controlled old LP is retired or has an assigned same-window retirement step with proof capture
 - `DEPRECATION_EVIDENCE.md` has named owners for liquidity, frontend, comms, and monitoring sign-off
 - verified-build artifact hash and reviewed dry-run manifest are attached to the release record
+- dry-run quorum artifact directory is attached to the release record
 
 If any of these fail, stop and keep migration closed.

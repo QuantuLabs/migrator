@@ -23,7 +23,7 @@ Fill the real values for:
 - old mint
 - new mint
 - reserve vault
-- at least one secondary RPC URL for quorum replay in the manifest itself
+- one or two secondary RPC URLs for quorum replay in the manifest itself
 - ops admin
 - initializer authority
 - expected upgrade authority
@@ -41,8 +41,8 @@ Run:
 ./scripts/run-mainnet-dry-run.sh release/mainnet-inputs.local.json
 ```
 
-For release sign-off, replay the same reviewed manifest across at least two
-independent RPCs:
+For release sign-off, replay the same reviewed manifest across the reviewed
+provider set:
 
 ```bash
 ./scripts/run-mainnet-dry-run-quorum.sh release/mainnet-inputs.local.json
@@ -87,10 +87,16 @@ DRY_RUN_RPC_URLS="https://rpc-2.example,https://rpc-3.example" \
 
 Rules:
 
-- the manifest `rpcUrl` is always used as the first provider
+- the manifest `rpcUrl` is always the primary provider
 - the manifest `secondaryRpcUrls` list is part of the reviewed release record
-- `DRY_RUN_RPC_URLS` is an optional override/addition for independent replay
-- release sign-off requires all providers to return exit `0`
+- `DRY_RUN_RPC_URLS` is an explicit operator override only; if used, the final resolved provider set must be attached to the release record
+- the lane accepts only `2` or `3` distinct normalized HTTPS providers
+- `2` providers means `2-of-2 exact-match`
+- `3` providers means `2-of-3 exact-match with the primary provider included in the winning set`
+- `DRY_RUN_MAX_SLOT_DRIFT` caps the winning-set slot skew, default `32`
+- independent means different providers or vendors, not just different URLs on the same backend
+- quorum artifacts are persisted under `artifacts/dry-run/<run-id>/`
+- release sign-off requires the persisted artifact bundle, not only exit `0`
 
 ## Phase Usage
 
@@ -104,6 +110,8 @@ Post-init:
 
 - set `expectConfigInitialized` to `true`
 - the validator will also fetch and compare the exact config PDA contents
+- run the post-init replay before opening migration to users, or while `paused=true`
+- do not allow claim traffic to race the post-init quorum replay
 
 ## Release Rule
 
@@ -113,5 +121,6 @@ exit `0` on the exact reviewed manifest.
 For final approval:
 
 - require `run-mainnet-dry-run.sh` to pass on the primary reviewed RPC
-- require `run-mainnet-dry-run-quorum.sh` to pass across at least two independent RPC providers
+- require `run-mainnet-dry-run-quorum.sh` to pass across the reviewed `2` or `3` provider set
 - treat any report mismatch as a release blocker until resolved
+- attach the resulting dry-run artifact directory to the release record

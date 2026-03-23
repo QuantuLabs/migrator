@@ -2,7 +2,8 @@
   "cluster": "mainnet-beta",
   "rpcUrl": "https://api.mainnet-beta.solana.com",
   "secondaryRpcUrls": [
-    "REPLACE_SECOND_RPC_URL"
+    "REPLACE_SECOND_RPC_URL",
+    "REPLACE_THIRD_RPC_URL"
   ],
   "expectConfigInitialized": false,
   "programId": "REPLACE_PROGRAM_ID",

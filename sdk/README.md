@@ -73,8 +73,11 @@ All verification commands are hard gates:
 
 `validate-mainnet-inputs-quorum` is intended for the multi-RPC quorum lane:
 
-- replay the same reviewed manifest across at least two RPC providers
+- replay the same reviewed manifest across the reviewed `2` or `3` provider set
 - take the primary RPC from the manifest and the remaining providers from `secondaryRpcUrls`, with optional `DRY_RUN_RPC_URLS` overrides
+- accept only distinct normalized HTTPS providers
+- enforce `2-of-2 exact-match` or `2-of-3 exact-match with the primary provider included`
+- enforce `DRY_RUN_MAX_SLOT_DRIFT` across the winning set, default `32`
 - ignore provider-specific fields like `rpcUrl`, `slot`, and `generatedAt`
-- require all critical checks and observed state to match across providers
+- persist `quorum.json`, `mismatches.json`, and per-provider reports under `artifacts/dry-run/<run-id>/` unless `DRY_RUN_REPORT_DIR` is set
 - exit nonzero on any mismatch
