@@ -5,6 +5,7 @@ This folder is for internal planning, security review, and operational preparati
 Contents:
 
 - `AUDIT.md` — design and security review
+- `GENERICIZATION_PLAN.md` — staged plan to remove project-specific naming after launch
 - `SECURITY_BASELINE.md` — official-practice and tooling alignment
 - `PLAN_9_DAYS.md` — delivery plan for the migration MVP
 - `../runbooks/KANI_LANE.md` — current per-harness formal-proof lane

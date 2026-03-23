@@ -36,6 +36,12 @@ buildWithdrawUnclaimedIx(args, accounts): TransactionInstruction
 decodeMigrationConfig(data: Buffer): MigrationConfig
 ```
 
+`buildInitializeConfigIx` V1 specifics:
+
+- `initializer` is the upgrade-authority signer and payer
+- `fundingAuthority` is the dedicated reserve-funding signer
+- `fundingNewTokenAccount` is the source SPL account that funds the reserve during init
+
 The frontend can then handle:
 
 - ATA existence checks
@@ -48,7 +54,7 @@ The frontend can then handle:
 
 - it is permissionless to trigger after `end_ts`
 - it always pays out to the canonical `new QX` ATA for the configured refund recipient
-- in V1 the refund recipient is set to `initializerAuthority` during `initialize_config`
+- in V1 the refund recipient is set to `fundingAuthority` during `initialize_config`
 - it transfers only the unclaimed approved amount, not the entire vault balance
 
 Operational verification commands:

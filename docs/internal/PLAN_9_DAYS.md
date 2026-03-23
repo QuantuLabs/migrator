@@ -68,7 +68,8 @@ Ship a credible migration MVP in time for the Bags hackathon:
 ### Day 8
 
 - mainnet preflight:
-  - reserve funded
+  - funding wallet funded
+  - reserve vault empty before init
   - program id fixed
   - config values verified
   - final Bags `new QX` mint verified as `Tokenkeg`

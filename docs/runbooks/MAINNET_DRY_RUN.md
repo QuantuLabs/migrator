@@ -104,6 +104,7 @@ Pre-init:
 
 - set `expectConfigInitialized` to `false`
 - require `initializerAuthority == expectedUpgradeAuthority`
+- require `expectedRefundRecipient == fundingAuthority`
 - require the derived config PDA to still be absent
 
 Post-init:

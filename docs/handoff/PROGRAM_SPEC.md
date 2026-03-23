@@ -39,22 +39,25 @@ Purpose:
 - create and initialize `MigrationConfig`
 - bind the program to the immutable mint pair
 - bind the reserve vault
+- fund the reserve vault atomically from the dedicated funding wallet
 - store the live migration window
 - bind an immutable total migration cap
-- bind an immutable refund recipient; in V1 it is set to `initializer_authority`
+- bind an immutable refund recipient; in V1 it is set to `funding_authority`
 
 Expected accounts:
 
 1. `[signer, writable]` initializer authority
 2. `[signer]` ops admin / multisig
-3. `[writable]` config PDA
-4. `[]` vault authority PDA
-5. `[]` vault new QX token account
-6. `[]` old QX mint
-7. `[]` new QX mint
-8. `[]` token program
-9. `[]` system program
-10. `[]` program data account
+3. `[signer]` funding authority
+4. `[writable]` funding authority new QX token account
+5. `[writable]` config PDA
+6. `[]` vault authority PDA
+7. `[writable]` vault new QX token account
+8. `[]` old QX mint
+9. `[]` new QX mint
+10. `[]` token program
+11. `[]` system program
+12. `[]` program data account
 
 Required checks:
 
@@ -71,9 +74,19 @@ Required checks:
 - reserve vault mint equals `new QX`
 - reserve vault owner equals vault authority PDA
 - reserve vault delegate and close-authority controls are cleared
+- reserve vault starts empty at initialization time
+- funding source account owner equals `funding_authority`
+- funding source account mint equals `new QX`
+- funding source delegate and close-authority controls are cleared
 - `migration_cap > 0`
-- reserve vault balance is at least `migration_cap`
+- funding source balance is at least `migration_cap`
 - `start_ts <= end_ts`
+
+Effects:
+
+1. create the config PDA
+2. transfer exactly `migration_cap` from the funding source account into the reserve vault
+3. persist the immutable config
 
 ### 1. `set_pause(paused: bool)`
 
@@ -212,7 +225,7 @@ Padding note:
 3. `config.vault_new_qx` never changes after init.
 4. `total_migrated` is monotonic.
 5. `total_migrated <= migration_cap`.
-6. Program never mints `new QX`; it only transfers from a pre-funded reserve.
+6. Program never mints `new QX`; it only transfers from a reserve funded during `initialize_config`.
 7. Program never transfers `old QX` anywhere; it only burns it.
 8. Program never accepts a caller-provided authority or destination without validating it against config and PDA seeds.
 9. `withdraw_unclaimed` is one-shot.
@@ -245,9 +258,10 @@ Initial discriminator map:
 
 ## Ops Notes
 
-- `vault_new_qx` should be funded before public launch
+- `funding_authority` and `funding_new_qx` should be reviewed before public launch
+- `vault_new_qx` should be empty before `initialize_config`
 - `migration_cap` should equal the approved migration total for the open live-holder window
-- the refund destination for unclaimed funds is fixed in config; in V1 that is `initializer_authority`
+- the refund destination for unclaimed funds is fixed in config; in V1 that is `funding_authority`
 - if any legacy balances are intentionally excluded, they must be operationally locked or removed before launch because V1 does not enforce wallet-level eligibility on-chain
 - the final Bags mint must be verified as `Tokenkeg` before mainnet initialization
 - public docs must publish:

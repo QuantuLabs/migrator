@@ -15,6 +15,7 @@ or frozen before init completes.
 - keep the upgrade authority on a controlled signer that can execute `initialize_config`
 - publish the exact expected upgrade authority address
 - publish the exact initializer address
+- publish the exact funding authority address
 - require `initializerAuthority == expectedUpgradeAuthority`
 
 Preferred setup:

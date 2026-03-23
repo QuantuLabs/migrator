@@ -19,6 +19,7 @@ Current implementation status:
 - `set_pause` implemented
 - `migrate_exact` implemented
 - `withdraw_unclaimed` implemented
+- `initialize_config` now funds the reserve atomically from a dedicated `funding_authority`
 - manual TypeScript SDK implemented
 - operational verification scripts implemented for mint, reserve vault, config, program authority, and reserve-proof checks
 - `Tokenkeg only` policy documented explicitly
@@ -45,8 +46,11 @@ Current verification coverage:
 - `LiteSVM` initialize_config reserve-vault control rejection
 - `LiteSVM` initialize_config reserve-vault close-authority rejection
 - `LiteSVM` initialize_config reserve-vault wrong-program-owner rejection
+- `LiteSVM` initialize_config prefunded-reserve-vault rejection
+- `LiteSVM` initialize_config funding-source owner mismatch rejection
+- `LiteSVM` initialize_config funding-source delegate-control rejection
 - `LiteSVM` initialize_config zero migration-cap rejection
-- `LiteSVM` initialize_config migration-cap-above-reserve rejection
+- `LiteSVM` initialize_config migration-cap-above-funding-balance rejection
 - `LiteSVM` initialize_config old-mint wrong-program-owner rejection
 - `LiteSVM` initialize_config old-mint authority-flag rejection
 - `LiteSVM` initialize_config new-mint freeze-authority rejection
@@ -128,7 +132,7 @@ What is still missing before mainnet confidence:
 Risk:
 
 - `1:1` is socially dead if the approved migration total is wrong or if the reserve cannot cover that approved total.
-- the program now binds an immutable on-chain `migration_cap` and rejects initialization unless the reserve vault already covers it.
+- the program now binds an immutable on-chain `migration_cap` and rejects initialization unless a reviewed funding wallet transfers that exact amount into an empty reserve vault during `initialize_config`.
 - the remaining trust surface is the off-chain selection of the approved migration total and any excluded balances, not an unbounded on-chain drain past that cap.
 
 Mitigation:
@@ -136,7 +140,9 @@ Mitigation:
 - compute eligible old supply before public commitment
 - either treat the migration as openly available to any live holder, or operationally lock excluded balances before launch
 - bind that approved raw-unit total into `migration_cap` during `initialize_config`
-- require reserve vault balance to cover `migration_cap` at initialization time
+- require a reviewed funding wallet and funding token account
+- require the reserve vault to start empty at initialization time
+- transfer exactly `migration_cap` into the reserve vault during `initialize_config`
 - publish reserve vault address before launch
 - keep `new QX` reserve segregated from all other treasury balances
 - do not announce universal `1:1` without proof

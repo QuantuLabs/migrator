@@ -35,7 +35,7 @@ In scope for V1:
 
 - `1:1` migration from `old QX` to `new QX`
 - `Tokenkeg` only (`spl-token` classic, not `Token-2022`)
-- pre-funded reserve vault for `new QX`
+- init-funded reserve vault for `new QX` from a dedicated funding wallet
 - immutable on-chain migration cap tied to the approved migration total
 - atomic burn + transfer
 - pause switch
@@ -83,7 +83,7 @@ Out of scope for V1:
 - `sdk/` passes `npx tsc --noEmit`
 - `LiteSVM` smoke and program-load tests are in place
 - `LiteSVM` transaction coverage asserts exact `TransactionError` outcomes for the main business-control failures
-- `LiteSVM` migration-flow suite currently covers `56` end-to-end cases
+- `LiteSVM` migration-flow suite currently covers `62` end-to-end cases
 - `./scripts/run-sbf-assurance-lane.sh` passes and is the canonical non-skippable LiteSVM SBF gate
 - `./scripts/run-mollusk-lane.sh` passes and is the canonical `Mollusk` entrypoint for `initialize_config`, paused pre-CPI `migrate_exact`, fixture roundtrip replay, and a real `SPL + ATA` bootstrap into `migrate_exact`
 - direct `cargo test --test mollusk_fuzz_lane` is not a release-authoritative substitute because it can reuse an already-built `target/deploy` artifact instead of rebuilding the SBF binary first
@@ -151,7 +151,7 @@ That means:
 - it is permissionless to trigger once the window is over
 - it marks the closeout as one-shot on-chain
 - it sends the reclaimed amount to the canonical ATA for the configured refund wallet
-- in V1, `initialize_config` binds that refund wallet to `initializer_authority`
+- in V1, `initialize_config` binds that refund wallet to `funding_authority`
 
 ## Eligibility Policy
 
