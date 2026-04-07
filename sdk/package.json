@@ -4,6 +4,9 @@
   "private": true,
   "author": "Quantu Labs",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
