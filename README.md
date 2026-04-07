@@ -72,7 +72,7 @@ Current coverage notes:
 - `LiteSVM` migration-flow suite covers `67` end-to-end cases
 - `Mollusk` lane covers `11` SBF-backed regression and fixture-replay cases
 - `Kani` lane covers `16` proof harnesses
-- SDK test suite covers `29` release and validator checks
+- SDK test suite covers `32` release and validator checks
 - `run-local-assurance-lane.sh` requires a clean worktree by default; verified-build is part of the release-grade path
 
 Important toolchain note:
